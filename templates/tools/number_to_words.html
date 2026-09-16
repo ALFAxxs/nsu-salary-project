@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raqam → So'z</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,500&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f2f6f1;
+    --paper-line: #dfe8dd;
+    --ink: #12241c;
+    --ink-soft: #52685d;
+    --ink-faint: #85978c;
+    --accent: #0b6e4f;
+    --accent-ink: #063d2c;
+    --accent-soft: #e3f1ea;
+    --gold: #a8792c;
+    --card-bg: #ffffff;
+    --border: #d7e2d4;
+    --shadow: 0 1px 2px rgba(18, 36, 28, 0.05), 0 8px 24px -12px rgba(18, 36, 28, 0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b1713;
+      --paper-line: #1a2f26;
+      --ink: #e8f1ea;
+      --ink-soft: #a2b8ac;
+      --ink-faint: #6c8078;
+      --accent: #43dba6;
+      --accent-ink: #b6f3d9;
+      --accent-soft: #123326;
+      --gold: #d9ae5f;
+      --card-bg: #101e18;
+      --border: #21392f;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -14px rgba(0, 0, 0, 0.55);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background-color: var(--paper);
+    background-image: repeating-linear-gradient(
+      to bottom, transparent, transparent 30px, var(--paper-line) 31px
+    );
+    color: var(--ink);
+    font-family: "Golos Text", "Segoe UI", system-ui, sans-serif;
+    padding: clamp(28px, 6vw, 64px) 20px 60px;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    margin-bottom: 18px;
+  }
+  .back-link:hover { color: var(--accent-ink); }
+
+  header { margin-bottom: clamp(28px, 5vw, 44px); }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--border);
+    padding: 5px 11px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-family: "Spectral", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.9rem, 4.4vw, 2.7rem);
+    line-height: 1.15;
+    margin: 0 0 10px;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--accent-ink);
+    font-weight: 500;
+  }
+  .lede {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 58ch;
+    margin: 0;
+  }
+
+  .amount-box {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: clamp(18px, 3.6vw, 28px) clamp(18px, 4vw, 30px);
+    margin-bottom: clamp(22px, 4vw, 34px);
+    position: relative;
+  }
+  .amount-box::before {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border: 1px dashed var(--border);
+    border-radius: 9px;
+    pointer-events: none;
+  }
+  .amount-label {
+    display: block;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+  }
+  .amount-row { display: flex; align-items: baseline; gap: 10px; }
+  .amount-sign {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: clamp(1.4rem, 5vw, 2.1rem);
+    color: var(--ink-faint);
+  }
+  #amount-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--ink);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    font-size: clamp(1.6rem, 6.5vw, 2.6rem);
+    letter-spacing: 0.01em;
+    caret-color: var(--accent);
+    width: 100%;
+  }
+  #amount-input::placeholder { color: var(--ink-faint); }
+  .amount-hint { margin-top: 10px; font-size: 0.82rem; color: var(--ink-faint); }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 18px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .lang-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+  .lang-tag .code {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    border-radius: 5px;
+    padding: 2px 6px;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+  }
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--ink-soft);
+    font-family: "Golos Text", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+  }
+  .copy-btn svg { width: 14px; height: 14px; flex: none; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .copy-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .copy-btn.copied { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+
+  .words {
+    font-family: "Spectral", Georgia, serif;
+    font-size: clamp(1.05rem, 2.6vw, 1.22rem);
+    line-height: 1.5;
+    color: var(--ink);
+    min-height: 2.4em;
+    margin: 0;
+  }
+  .words.is-placeholder { color: var(--ink-faint); font-style: italic; }
+  .words.is-error { color: var(--gold); font-style: italic; font-family: "Golos Text", sans-serif; font-size: 0.95rem; }
+
+  footer {
+    margin-top: clamp(30px, 5vw, 46px);
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  @media (prefers-reduced-motion: reduce) { .copy-btn { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="{% url 'dashboard:index' %}">&larr; Boshqaruv paneliga qaytish</a>
+
+  <header>
+    <span class="eyebrow">Uz &middot; Ru &middot; En</span>
+    <h1>Raqamni <em>so'zga</em> aylantiring</h1>
+    <p class="lede">Har qanday sonni o'zbek, rus va ingliz tillarida bir vaqtning o'zida yozma shaklga o'tkazadi — shartnoma, ariza yoki chek uchun. Natijani nusxalash uchun har bir tarjima yonidagi tugmadan foydalaning.</p>
+  </header>
+
+  <div class="amount-box">
+    <label class="amount-label" for="amount-input">Summani kiriting</label>
+    <div class="amount-row">
+      <span class="amount-sign" aria-hidden="true">№</span>
+      <input id="amount-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="0" value="1 659 723">
+    </div>
+    <p class="amount-hint">Butun sonlar, ±15 xonagacha (trillionlargacha) qo'llab-quvvatlanadi.</p>
+  </div>
+
+  <div class="cards" id="cards">
+    <div class="card" data-lang="uz">
+      <div class="card-head">
+        <span class="lang-tag"><span class="code">UZ</span> O'zbekcha</span>
+        <button class="copy-btn" type="button" data-copy-for="uz" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span class="copy-label">Nusxalash</span>
+        </button>
+      </div>
+      <p class="words" id="out-uz"></p>
+    </div>
+
+    <div class="card" data-lang="ru">
+      <div class="card-head">
+        <span class="lang-tag"><span class="code">RU</span> Русский</span>
+        <button class="copy-btn" type="button" data-copy-for="ru" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span class="copy-label">Копировать</span>
+        </button>
+      </div>
+      <p class="words" id="out-ru"></p>
+    </div>
+
+    <div class="card" data-lang="en">
+      <div class="card-head">
+        <span class="lang-tag"><span class="code">EN</span> English</span>
+        <button class="copy-btn" type="button" data-copy-for="en" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span class="copy-label">Copy</span>
+        </button>
+      </div>
+      <p class="words" id="out-en"></p>
+    </div>
+  </div>
+
+  <footer>
+    Manfiy sonlar "minus" bilan, nol esa alohida so'z bilan ko'rsatiladi. Kasr (tiyin/kopek/cent) hozircha qo'llab-quvvatlanmaydi — faqat butun sonlar.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var onesUz = ['', 'bir', 'ikki', 'uch', "to'rt", 'besh', 'olti', 'yetti', 'sakkiz', "to'qqiz"];
+  var tensUz = ['', "o'n", 'yigirma', "o'ttiz", 'qirq', 'ellik', 'oltmish', 'yetmish', 'sakson', "to'qson"];
+  var scalesUz = ['', 'ming', 'million', 'milliard', 'trillion'];
+
+  function threeDigitUz(n) {
+    var parts = [];
+    var h = Math.floor(n / 100), t = Math.floor((n % 100) / 10), o = n % 10;
+    if (h) parts.push((h > 1 ? onesUz[h] + ' ' : '') + 'yuz');
+    if (t) parts.push(tensUz[t]);
+    if (o) parts.push(onesUz[o]);
+    return parts.join(' ');
+  }
+
+  function numberToWordsUz(n) {
+    if (n === 0) return 'nol';
+    var neg = n < 0; n = Math.abs(n);
+    var groups = [];
+    while (n > 0) { groups.push(n % 1000); n = Math.floor(n / 1000); }
+    var parts = [];
+    for (var i = groups.length - 1; i >= 0; i--) {
+      if (groups[i] === 0) continue;
+      var words = threeDigitUz(groups[i]);
+      if (scalesUz[i]) words += ' ' + scalesUz[i];
+      parts.push(words);
+    }
+    return (neg ? 'minus ' : '') + parts.join(' ');
+  }
+
+  var onesRu = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять',
+    'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать',
+    'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+  var tensRu = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+  var hundredsRu = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+  var scalesRu = [
+    null,
+    ['тысяча', 'тысячи', 'тысяч'],
+    ['миллион', 'миллиона', 'миллионов'],
+    ['миллиард', 'миллиарда', 'миллиардов'],
+    ['триллион', 'триллиона', 'триллионов']
+  ];
+
+  function pluralFormIndexRu(n) {
+    var n100 = n % 100;
+    if (n100 >= 11 && n100 <= 14) return 2;
+    var n10 = n % 10;
+    if (n10 === 1) return 0;
+    if (n10 >= 2 && n10 <= 4) return 1;
+    return 2;
+  }
+
+  function threeDigitRu(n, feminine) {
+    var parts = [];
+    var h = Math.floor(n / 100), rem = n % 100;
+    if (h) parts.push(hundredsRu[h]);
+    if (rem >= 10 && rem < 20) {
+      parts.push(onesRu[rem]);
+    } else {
+      var t = Math.floor(rem / 10), o = rem % 10;
+      if (t) parts.push(tensRu[t]);
+      if (o) {
+        if (feminine && o === 1) parts.push('одна');
+        else if (feminine && o === 2) parts.push('две');
+        else parts.push(onesRu[o]);
+      }
+    }
+    return parts.join(' ');
+  }
+
+  function numberToWordsRu(n) {
+    if (n === 0) return 'ноль';
+    var neg = n < 0; n = Math.abs(n);
+    var groups = [];
+    while (n > 0) { groups.push(n % 1000); n = Math.floor(n / 1000); }
+    var parts = [];
+    for (var i = groups.length - 1; i >= 0; i--) {
+      var g = groups[i];
+      if (g === 0) continue;
+      var scale = scalesRu[i];
+      var feminine = i === 1;
+      var words = threeDigitRu(g, feminine);
+      if (scale) words += ' ' + scale[pluralFormIndexRu(g)];
+      parts.push(words);
+    }
+    return (neg ? 'минус ' : '') + parts.join(' ');
+  }
+
+  var onesEn = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  var tensEn = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  var scalesEn = ['', 'thousand', 'million', 'billion', 'trillion'];
+
+  function threeDigitEn(n) {
+    var s = '';
+    var h = Math.floor(n / 100), r = n % 100;
+    if (h) s += onesEn[h] + ' hundred';
+    if (r) {
+      if (s) s += ' ';
+      if (r < 20) s += onesEn[r];
+      else {
+        s += tensEn[Math.floor(r / 10)];
+        if (r % 10) s += '-' + onesEn[r % 10];
+      }
+    }
+    return s;
+  }
+
+  function numberToWordsEn(n) {
+    if (n === 0) return 'zero';
+    var neg = n < 0; n = Math.abs(n);
+    var groups = [];
+    while (n > 0) { groups.push(n % 1000); n = Math.floor(n / 1000); }
+    var parts = [];
+    for (var i = groups.length - 1; i >= 0; i--) {
+      if (groups[i] === 0) continue;
+      var words = threeDigitEn(groups[i]);
+      if (scalesEn[i]) words += ' ' + scalesEn[i];
+      parts.push(words);
+    }
+    return (neg ? 'minus ' : '') + parts.join(' ');
+  }
+
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  var input = document.getElementById('amount-input');
+  var outEls = { uz: document.getElementById('out-uz'), ru: document.getElementById('out-ru'), en: document.getElementById('out-en') };
+
+  var placeholders = { uz: 'Raqam kiriting', ru: 'Введите число', en: 'Enter a number' };
+  var tooBig = {
+    uz: "Raqam juda katta (15 xonagacha qo'llab-quvvatlanadi)",
+    ru: 'Число слишком большое (до 15 цифр)',
+    en: 'Number is too large (up to 15 digits)'
+  };
+  var copyLabel = { uz: 'Nusxalash', ru: 'Копировать', en: 'Copy' };
+  var copiedLabel = { uz: 'Nusxalandi ✓', ru: 'Скопировано ✓', en: 'Copied ✓' };
+
+  function formatWithSpaces(digits) {
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  }
+
+  function reformat(el) {
+    var pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+    var val = el.value;
+    var digitsBefore = (val.slice(0, pos).match(/[0-9]/g) || []).length;
+
+    var negative = /^\s*-/.test(val);
+    var digitsOnly = val.replace(/[^0-9]/g, '');
+    digitsOnly = digitsOnly.replace(/^0+(?=\d)/, '');
+
+    var formatted = (negative && digitsOnly ? '-' : '') + formatWithSpaces(digitsOnly);
+    el.value = formatted;
+
+    var count = 0, newPos = negative && digitsOnly ? 1 : 0;
+    if (digitsBefore > 0) {
+      for (var i = 0; i < formatted.length; i++) {
+        if (/[0-9]/.test(formatted[i])) count++;
+        if (count === digitsBefore) { newPos = i + 1; break; }
+        newPos = formatted.length;
+      }
+    }
+    try { el.setSelectionRange(newPos, newPos); } catch (e) {}
+  }
+
+  function currentValue() {
+    var digitsOnly = input.value.replace(/[^0-9]/g, '');
+    if (!digitsOnly) return { kind: 'empty' };
+    if (digitsOnly.replace(/^0+(?=\d)/, '').length > 15) return { kind: 'toobig' };
+    var negative = /^\s*-/.test(input.value);
+    return { kind: 'ok', value: (negative ? -1 : 1) * parseInt(digitsOnly, 10) };
+  }
+
+  function render() {
+    var state = currentValue();
+    var results;
+    if (state.kind === 'empty') {
+      results = null;
+    } else if (state.kind === 'toobig') {
+      results = 'toobig';
+    } else {
+      results = {
+        uz: cap(numberToWordsUz(state.value)),
+        ru: cap(numberToWordsRu(state.value)),
+        en: cap(numberToWordsEn(state.value))
+      };
+    }
+
+    ['uz', 'ru', 'en'].forEach(function (lang) {
+      var el = outEls[lang];
+      el.classList.remove('is-placeholder', 'is-error');
+      if (results === null) {
+        el.textContent = placeholders[lang];
+        el.classList.add('is-placeholder');
+      } else if (results === 'toobig') {
+        el.textContent = tooBig[lang];
+        el.classList.add('is-error');
+      } else {
+        el.textContent = results[lang];
+      }
+    });
+  }
+
+  input.addEventListener('input', function () {
+    reformat(input);
+    render();
+  });
+
+  render();
+
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var lang = btn.getAttribute('data-copy-for');
+      var text = outEls[lang].textContent;
+      if (!text || outEls[lang].classList.contains('is-placeholder') || outEls[lang].classList.contains('is-error')) return;
+
+      function done() {
+        var label = btn.querySelector('.copy-label');
+        label.textContent = copiedLabel[lang];
+        btn.classList.add('copied');
+        clearTimeout(btn._t);
+        btn._t = setTimeout(function () {
+          label.textContent = copyLabel[lang];
+          btn.classList.remove('copied');
+        }, 1600);
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+  });
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+})();
+</script>
+</body>
+</html>

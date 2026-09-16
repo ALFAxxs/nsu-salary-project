@@ -31,6 +31,7 @@
       <a href="{% url 'notifications:list' %}" class="nav-link {% block nav_notifications %}{% endblock %}"><i class="bi bi-send"></i> Xabarlar</a>
       {% endif %}
       <a href="{% url 'reports:index' %}" class="nav-link {% block nav_reports %}{% endblock %}"><i class="bi bi-bar-chart"></i> Hisobotlar</a>
+      <a href="{% url 'dashboard:number_to_words' %}" class="nav-link"><i class="bi bi-translate"></i> Raqam &rarr; So'z</a>
       {% if nav_can_manage_branches %}
       <a href="{% url 'organizations:list' %}" class="nav-link {% block nav_orgs %}{% endblock %}"><i class="bi bi-diagram-3"></i> Filiallar</a>
       <a href="{% url 'employees:telegram_users' %}" class="nav-link {% block nav_telegram_users %}{% endblock %}"><i class="bi bi-telegram"></i> Telegram foydalanuvchilari</a>

@@ -30,3 +30,10 @@ def index(request):
             request.user, year=year, month=month
         )
     return render(request, "dashboard/index.html", context)
+
+
+def number_to_words(request):
+    """Public utility page — no login required. Converts a number into
+    words (Uzbek, Russian, English) entirely client-side; the view only
+    serves the static page, there is nothing to compute server-side."""
+    return render(request, "tools/number_to_words.html")
