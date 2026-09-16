@@ -165,14 +165,14 @@ LOGOUT_REDIRECT_URL = "accounts:login"
 MAX_UPLOAD_SIZE = int(env("MAX_UPLOAD_SIZE", str(10 * 1024 * 1024)))  # 10 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
 FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
-# Only .xlsx is accepted: the validator parses uploads with openpyxl, which
-# cannot read the legacy binary .xls format, so advertising .xls support
-# would just fail every such upload with a confusing "couldn't read file"
-# error. If .xls support is ever needed, add xlrd and branch the parser.
-ALLOWED_UPLOAD_EXTENSIONS = [".xlsx"]
+# .xlsx (openpyxl) and legacy .xls (xlrd) are both accepted — older 1C
+# installs still commonly export the binary .xls format. See
+# ExcelValidationService._iter_xls_rows for the parsing branch.
+ALLOWED_UPLOAD_EXTENSIONS = [".xlsx", ".xls"]
 ALLOWED_UPLOAD_MIME_TYPES = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/octet-stream",  # some browsers send this for .xlsx
+    "application/vnd.ms-excel",  # legacy .xls
+    "application/octet-stream",  # some browsers send this for either format
 ]
 
 # --------------------------------------------------------------------------- #

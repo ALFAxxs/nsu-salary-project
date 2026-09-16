@@ -31,7 +31,14 @@ Key rules:
     items, ...) is simply never looked at, let alone sent to the employee.
   * Salary values numeric and non-negative, no duplicate employee within the
     file (existing or newly-created).
-  * Formula cells are rejected (openpyxl data_only=False lets us detect them).
+  * Formula cells are rejected (openpyxl data_only=False lets us detect
+    them) — .xlsx only; see _iter_xls_rows for why legacy .xls can't do
+    this check.
+  * Both modern (.xlsx, via openpyxl) and legacy (.xls, via xlrd) files are
+    accepted — real payroll exports from older 1C installs are still
+    commonly .xls. Both paths feed the same row-processing code below
+    through the tiny _Cell wrapper, so nothing past _iter_*_rows needs to
+    know which format it's reading.
 """
 from __future__ import annotations
 
@@ -43,6 +50,14 @@ from openpyxl import load_workbook
 from apps.common.jshshir import normalize_jshshir
 from apps.common.phone import is_valid_uz_phone, normalize_phone
 from apps.employees.models import Employee
+
+
+@dataclass
+class _Cell:
+    """Uniform stand-in for both openpyxl's Cell and xlrd's raw values, so
+    the rest of the validator never needs to know which library read the
+    file — it only ever accesses `.value`."""
+    value: object
 
 # Canonical fields the importer understands.
 CANONICAL_FIELDS = [
@@ -68,7 +83,11 @@ DEFAULT_HEADER_CANDIDATES: dict[str, list[str]] = {
     "gross_salary": ["gross_salary", "всего начислено"],
     "advance": ["advance", "аванс"],
     "deductions": ["deductions", "всего удержано"],
-    "net_salary": ["net_salary", "сальдо на конец", "к выдаче"],
+    # "Выплачено" (paid out) and "Сальдо на конец" (balance) are mutually
+    # exclusive in the exports we've seen — each employee row fills exactly
+    # one, never both — so both are tried and whichever one has a value on
+    # a given row wins (see _first_nonblank).
+    "net_salary": ["net_salary", "выплачено", "сальдо на конец", "к выдаче"],
 }
 # Back-compat: some callers (build_template, error report headers) still
 # want a single canonical->label default, e.g. for the downloadable template.
@@ -156,19 +175,20 @@ class ExcelValidationService:
     # --------------------------------------------------------------------- #
     def validate(self, file_obj) -> ValidationReport:
         report = ValidationReport()
-        try:
-            wb = load_workbook(file_obj, read_only=True, data_only=False)
-        except Exception:
-            report.fatal_error = "Faylni o'qib bo'lmadi. Excel (.xlsx) fayl ekanligini tekshiring."
-            return report
-
-        ws = wb.active
-        rows_iter = ws.iter_rows(values_only=False)
+        filename = (getattr(file_obj, "name", "") or "").lower()
+        is_legacy_xls = filename.endswith(".xls") and not filename.endswith(".xlsx")
 
         try:
+            if is_legacy_xls:
+                rows_iter = self._iter_xls_rows(file_obj)
+            else:
+                rows_iter = self._iter_xlsx_rows(file_obj)
             header_cells = next(rows_iter)
         except StopIteration:
             report.fatal_error = "Fayl bo'sh."
+            return report
+        except Exception:
+            report.fatal_error = "Faylni o'qib bo'lmadi. Excel (.xlsx yoki .xls) fayl ekanligini tekshiring."
             return report
 
         headers = [
@@ -183,20 +203,27 @@ class ExcelValidationService:
             if h:
                 header_index.setdefault(h.lower(), i)
 
-        # Resolve canonical field -> column index. A unit's own explicit
-        # mapping is used as-is; otherwise try each recognized header text
-        # for that field, in order, until one is found in this file.
-        col_for: dict[str, int] = {}
+        # Resolve canonical field -> ALL matching column indices (not just
+        # the first). A unit's own explicit mapping is used as-is (one
+        # column); otherwise every recognized header text for that field
+        # that's actually present in this file is kept — see
+        # _first_nonblank, which reads them in this same priority order and
+        # takes the first column that actually has a value on a given row
+        # (handles exports that split one logical amount across two
+        # mutually-exclusive columns, e.g. "paid" vs "still owed").
+        col_for: dict[str, list[int]] = {}
         for canonical in CANONICAL_FIELDS:
             candidates = (
                 [self.header_mapping[canonical]] if canonical in self.header_mapping
                 else DEFAULT_HEADER_CANDIDATES.get(canonical, [canonical])
             )
+            indices = []
             for candidate in candidates:
                 idx = header_index.get(str(candidate).strip().lower())
                 if idx is not None:
-                    col_for[canonical] = idx
-                    break
+                    indices.append(idx)
+            if indices:
+                col_for[canonical] = indices
 
         # Check required columns.
         missing = [req for req in REQUIRED_ALL if req not in col_for]
@@ -204,11 +231,12 @@ class ExcelValidationService:
             report.fatal_error = "Majburiy ustunlar topilmadi: " + ", ".join(missing)
             return report
 
+        matched_indices = {idx for indices in col_for.values() for idx in indices}
         # Every column NOT already used for a canonical field and not on the
         # exclusion list becomes a generic component — whatever it's called.
         component_cols = [
             (i, h) for i, h in enumerate(headers)
-            if h and i not in col_for.values() and h.lower() not in EXCLUDED_COMPONENT_HEADERS
+            if h and i not in matched_indices and h.lower() not in EXCLUDED_COMPONENT_HEADERS
         ]
 
         # Preload ALL active employees for fast phone/JSHSHIR lookup —
@@ -230,8 +258,8 @@ class ExcelValidationService:
                 continue
 
             raw = {
-                field_name: (values[idx] if idx < len(values) else None)
-                for field_name, idx in col_for.items()
+                field_name: self._first_nonblank(values, indices)
+                for field_name, indices in col_for.items()
             }
             # Not an employee row — no phone, no JSHSHIR, AND no name (e.g. a
             # payroll export's secondary sub-code row under the real header,
@@ -257,16 +285,15 @@ class ExcelValidationService:
                 rr.components.append({"label": header_text, "value": self._json_safe(v)})
 
             # Reject formula cells (spec §13).
-            for field_name, idx in col_for.items():
-                cell = cells[idx] if idx < len(cells) else None
-                if cell is not None and isinstance(cell.value, str) and cell.value.startswith("="):
-                    rr.errors.append(f"'{field_name}' katagida formula bor")
+            for field_name, indices in col_for.items():
+                for idx in indices:
+                    cell = cells[idx] if idx < len(cells) else None
+                    if cell is not None and isinstance(cell.value, str) and cell.value.startswith("="):
+                        rr.errors.append(f"'{field_name}' katagida formula bor")
 
             self._validate_row(rr, by_phone, by_jshshir, seen_employee_ids,
                                seen_new_phones, seen_new_jshshirs)
             report.rows.append(rr)
-
-        wb.close()
 
         # Aggregate.
         report.total_rows = len(report.rows)
@@ -280,6 +307,42 @@ class ExcelValidationService:
             else:
                 report.error_rows += 1
         return report
+
+    # --------------------------------------------------------------------- #
+    @staticmethod
+    def _iter_xlsx_rows(file_obj):
+        """.xlsx via openpyxl, data_only=False so a formula cell's raw
+        '=...' text is still visible to the formula-rejection check below."""
+        wb = load_workbook(file_obj, read_only=True, data_only=False)
+        try:
+            for row in wb.active.iter_rows(values_only=False):
+                yield [_Cell(c.value) for c in row]
+        finally:
+            wb.close()
+
+    @staticmethod
+    def _iter_xls_rows(file_obj):
+        """Legacy .xls via xlrd. Unlike openpyxl, xlrd never exposes a
+        formula's source text — only its last-computed value — so the
+        formula-rejection check simply never fires for this format; there
+        is no raw '=...' string here to catch. Acceptable for this format:
+        these are machine-generated 1C/accounting exports, not free-form
+        user spreadsheets."""
+        import xlrd
+
+        book = xlrd.open_workbook(file_contents=file_obj.read())
+        sheet = book.sheet_by_index(0)
+        for r in range(sheet.nrows):
+            row = []
+            for c in range(sheet.ncols):
+                value = sheet.cell_value(r, c)
+                cell_type = sheet.cell_type(r, c)
+                if cell_type == xlrd.XL_CELL_DATE:
+                    value = xlrd.xldate_as_datetime(value, book.datemode)
+                elif cell_type == xlrd.XL_CELL_EMPTY:
+                    value = None
+                row.append(_Cell(value))
+            yield row
 
     # --------------------------------------------------------------------- #
     def _validate_row(self, rr, by_phone, by_jshshir, seen_ids,
@@ -354,6 +417,20 @@ class ExcelValidationService:
                 rr.normalized[f] = value
             else:
                 rr.normalized[f] = value
+
+    @staticmethod
+    def _first_nonblank(values, indices):
+        """The value of the first column (in candidate-priority order)
+        among `indices` that actually has something in it on this row —
+        letting a canonical field be split across mutually-exclusive
+        columns in the source file (see net_salary's candidate list)."""
+        for idx in indices:
+            if idx >= len(values):
+                continue
+            v = values[idx]
+            if v is not None and not (isinstance(v, str) and not v.strip()):
+                return v
+        return None
 
     @staticmethod
     def _clean_str(v) -> str:

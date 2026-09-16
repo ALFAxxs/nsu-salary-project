@@ -16,3 +16,4 @@ aiogram==3.*
 
 # Excel
 openpyxl==3.1.*
+xlrd==2.*  # legacy .xls payroll exports (older 1C installs)

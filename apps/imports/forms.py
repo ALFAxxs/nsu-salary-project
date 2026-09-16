@@ -38,7 +38,7 @@ class ImportUploadForm(forms.Form):
         widget=forms.Select(attrs={"class": "form-select"}), label="Oy",
     )
     file = forms.FileField(
-        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": ".xlsx"}),
+        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": ".xlsx,.xls"}),
         label="Excel fayl",
     )
 
@@ -51,7 +51,7 @@ class ImportUploadForm(forms.Form):
         f = self.cleaned_data["file"]
         ext = os.path.splitext(f.name)[1].lower()
         if ext not in settings.ALLOWED_UPLOAD_EXTENSIONS:
-            raise forms.ValidationError("Faqat .xlsx fayllar qabul qilinadi.")
+            raise forms.ValidationError("Faqat .xlsx yoki .xls fayllar qabul qilinadi.")
         if f.size > settings.MAX_UPLOAD_SIZE:
             mb = settings.MAX_UPLOAD_SIZE // (1024 * 1024)
             raise forms.ValidationError(f"Fayl hajmi {mb} MB dan oshmasligi kerak.")
