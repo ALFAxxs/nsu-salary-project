@@ -45,9 +45,9 @@
 <div class="card mb-3">
   <div class="card-header bg-white fw-semibold">Valid qatorlar (dastlabki 50)</div>
   <div class="table-responsive"><table class="table table-sm mb-0">
-    <thead class="table-light"><tr><th>Qator</th><th>Kod</th><th>Telefon</th><th>Qo'lga</th><th>Telegram</th></tr></thead>
+    <thead class="table-light"><tr><th>Qator</th><th>F.I.Sh</th><th>PINFL</th><th>Qo'lga</th><th>Telegram</th></tr></thead>
     <tbody>{% for r in valid_preview %}
-      <tr><td>{{ r.row_number }}</td><td>{{ r.normalized.employee_code }}</td><td>{{ r.normalized.phone }}</td><td>{{ r.normalized.net_salary }}</td>
+      <tr><td>{{ r.row_number }}</td><td>{{ r.normalized.full_name|default:"—" }}</td><td>{{ r.normalized.jshshir|default:"—" }}</td><td>{{ r.normalized.net_salary }}</td>
         <td>{% if r.telegram_linked %}<span class="badge badge-green">✓</span>{% else %}<span class="badge badge-yellow">✗</span>{% endif %}</td></tr>
     {% endfor %}</tbody>
   </table></div>
