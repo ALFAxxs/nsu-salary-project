@@ -166,6 +166,82 @@ class TelegramLinkingTests(TestCase):
         self.assertEqual(wrong.telegram_id, 555)
 
 
+class AutoSendAfterLinkTests(TestCase):
+    """A salary message held back only for TELEGRAM_NOT_CONNECTED must go
+    out immediately once the employee links — via either path (bot /start,
+    or an HR-side auto-link) — without an admin re-clicking Send."""
+
+    def setUp(self):
+        _, self.b1, _ = make_org()
+        self.emp = Employee.objects.create(
+            full_name="Ali", phone="998901234567", jshshir="30101234567890",
+            organization_unit=self.b1)
+        imp = SalaryImport.objects.create(
+            organization_unit=self.b1, period_year=2026, period_month=8,
+            file_name="x.xlsx",
+            uploaded_by=User.objects.create_user("u6", password="x", role=Role.SUPER_ADMIN))
+        self.salary = Salary.objects.create(
+            employee=self.emp, organization_unit=self.b1, period_year=2026, period_month=8,
+            net_salary=Decimal("5900000"), source_import=imp)
+        SalaryNotificationService.prepare_for_import(imp)
+        self.msg = TelegramMessage.objects.get(employee=self.emp)
+        self.assertEqual(self.msg.status, MessageStatus.TELEGRAM_NOT_CONNECTED)
+
+    def _send_mocks(self):
+        from unittest.mock import MagicMock, patch
+        return (
+            patch("apps.notifications.tasks.settings.TELEGRAM_BOT_TOKEN", "test-token"),
+            patch("apps.notifications.tasks.requests.post", return_value=MagicMock(
+                status_code=200, json=lambda: {"result": {"message_id": 1}})),
+        )
+
+    def test_bot_start_link_triggers_the_held_back_message(self):
+        token_patch, post_patch = self._send_mocks()
+        with token_patch, post_patch as mock_post:
+            with self.captureOnCommitCallbacks(execute=True):
+                outcome = EmployeeRegistrationService.link_telegram(
+                    raw_phone="998901234567", raw_jshshir="30101234567890",
+                    telegram_id=777, telegram_username="ali")
+        self.assertEqual(outcome.result, LinkResult.LINKED)
+        self.assertEqual(mock_post.call_count, 1)
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.status, MessageStatus.SENT)
+
+    def test_hr_side_auto_link_triggers_the_held_back_message(self):
+        # This phone+JSHSHIR pressed /start (and was remembered) BEFORE HR
+        # ever touched this employee's record.
+        EmployeeRegistrationService.record_contact(
+            raw_phone="998901234567", telegram_id=888,
+            telegram_username="ali2", raw_jshshir="30101234567890",
+        )
+        token_patch, post_patch = self._send_mocks()
+        with token_patch, post_patch as mock_post:
+            with self.captureOnCommitCallbacks(execute=True):
+                linked = EmployeeRegistrationService.try_auto_link_from_contact(self.emp)
+        self.assertTrue(linked)
+        self.assertEqual(mock_post.call_count, 1)
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.status, MessageStatus.SENT)
+
+    def test_link_that_still_mismatches_jshshir_sends_nothing(self):
+        # Sanity check: the auto-send hook must not bypass the gate itself —
+        # only a genuinely PENDING-eligible message gets dispatched.
+        other = Employee.objects.create(
+            full_name="Boshqa xodim", phone="998909998877",
+            jshshir="99999999999999", organization_unit=self.b1)
+        token_patch, post_patch = self._send_mocks()
+        with token_patch, post_patch as mock_post:
+            with self.captureOnCommitCallbacks(execute=True):
+                EmployeeRegistrationService.link_telegram(
+                    raw_phone="998909998877", raw_jshshir="99999999999999",
+                    telegram_id=999)
+        self.assertEqual(mock_post.call_count, 0)
+        self.msg.refresh_from_db()
+        self.assertEqual(self.msg.status, MessageStatus.TELEGRAM_NOT_CONNECTED)  # untouched
+        other.refresh_from_db()
+        self.assertEqual(other.telegram_id, 999)  # they themselves did link fine
+
+
 class BranchIsolationTests(TestCase):
     """The mandatory test: Branch 1 admin cannot see Branch 2 data (spec §51)."""
 

@@ -147,3 +147,40 @@ class SalaryNotificationService:
         message.status = _eligible_status(message.salary, message.employee)
         message.save(update_fields=["telegram_id", "status", "updated_at"])
         return message
+
+    @staticmethod
+    @transaction.atomic
+    def recheck_after_link(employee) -> int:
+        """
+        Called right after an employee becomes telegram-linked — via the
+        bot's own /start flow, or HR creating/editing an Employee that
+        auto-links to a pending TelegramContact (see
+        EmployeeRegistrationService). Any of THEIR already-prepared
+        messages that were only held back for TELEGRAM_NOT_CONNECTED (or
+        JSHSHIR_MISMATCH, in case that also got fixed around the same
+        time) go out immediately instead of waiting for an admin to
+        revisit that import and click "Send" again. Returns how many were
+        dispatched.
+        """
+        from apps.notifications.tasks import send_salary_message
+
+        candidates = TelegramMessage.objects.select_related("salary").filter(
+            employee=employee,
+            status__in=[MessageStatus.TELEGRAM_NOT_CONNECTED, MessageStatus.JSHSHIR_MISMATCH],
+        )
+        dispatched = 0
+        for msg in candidates:
+            status = _eligible_status(msg.salary, employee)
+            if status != MessageStatus.PENDING:
+                continue
+            msg.telegram_id = employee.telegram_id
+            msg.status = status
+            msg.save(update_fields=["telegram_id", "status", "updated_at"])
+            # Defer the Celery dispatch until this (possibly nested, e.g.
+            # inside link_telegram's own atomic block) transaction actually
+            # commits — a worker on a separate connection could otherwise
+            # try to load this message before the write is durable and find
+            # nothing, silently dropping the send.
+            transaction.on_commit(lambda pk=msg.pk: send_salary_message.delay(pk))
+            dispatched += 1
+        return dispatched
