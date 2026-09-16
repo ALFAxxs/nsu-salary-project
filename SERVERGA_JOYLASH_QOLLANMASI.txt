@@ -1,0 +1,322 @@
+========================================================================
+NSU SALARY BOT — SERVERNI 0 DAN SOZLASH VA LOYIHANI ISHGA TUSHURISH
+========================================================================
+Bu qo'llanma toza Ubuntu server (22.04 yoki 24.04 LTS, tavsiya etiladi)
+uchun yozilgan. Barcha komandalarni SSH orqali serverga kirib, yuqoridan
+pastga qarab, ketma-ket bajaring. "# " bilan boshlangan qatorlar izoh —
+ularni terish shart emas.
+
+Talab qilinadigan narsalar (oldindan tayyorlab qo'ying):
+  - Server (VPS): kamida 2 GB RAM, 1-2 CPU, 20+ GB disk
+  - Domen nomi (masalan: oylik.example.uz) — DNS A-yozuvi shu serverning
+    IP-manziliga yo'naltirilgan bo'lishi kerak
+  - Sizning GitHub repo manzilingiz: github.com/ALFAxxs/nsu-salary-project
+  - Telegram bot tokeni (@BotFather orqali olingan)
+
+
+========================================================================
+1-QADAM. SERVERGA BIRINCHI KIRISH VA TIZIMNI YANGILASH
+========================================================================
+ssh root@SERVER_IP
+
+apt update && apt upgrade -y
+
+# Kerakli asosiy paketlar
+apt install -y python3 python3-venv python3-pip python3-dev \
+    build-essential libpq-dev git curl nginx ufw
+
+# Xavfsizlik devorini yoqish (SSH portini bloklab qo'ymaslik uchun avval SSH ga ruxsat bering)
+ufw allow OpenSSH
+ufw allow 'Nginx Full'
+ufw enable
+# so'ralganda "y" deb tasdiqlang
+
+
+========================================================================
+2-QADAM. ALOHIDA (root bo'lmagan) FOYDALANUVCHI YARATISH — www-data
+========================================================================
+# deploy/ papkasidagi systemd fayllar www-data foydalanuvchisi nomidan
+# ishlaydi — bu odatda nginx bilan birga avtomatik mavjud bo'ladi.
+id www-data
+# Agar mavjud bo'lmasa:
+#   adduser --system --group --no-create-home www-data
+
+
+========================================================================
+3-QADAM. POSTGRESQL O'RNATISH VA BAZA YARATISH
+========================================================================
+apt install -y postgresql postgresql-contrib
+
+sudo -u postgres psql <<'EOF'
+CREATE DATABASE salary_db;
+CREATE USER salary_user WITH PASSWORD 'KUCHLI_PAROL_BU_YERGA';
+ALTER ROLE salary_user SET client_encoding TO 'utf8';
+ALTER ROLE salary_user SET default_transaction_isolation TO 'read committed';
+ALTER ROLE salary_user SET timezone TO 'Asia/Tashkent';
+GRANT ALL PRIVILEGES ON DATABASE salary_db TO salary_user;
+\c salary_db
+GRANT ALL ON SCHEMA public TO salary_user;
+ALTER SCHEMA public OWNER TO salary_user;
+\q
+EOF
+# MUHIM: PostgreSQL 15+ da "public" schemaga CREATE huquqi endi
+# avtomatik berilmaydi (eski versiyalarda beriladi edi) — shuning
+# uchun yuqoridagi ikkita GRANT/ALTER qatori shart, aks holda
+# "python manage.py migrate" "permission denied for schema public"
+# xatosi bilan to'xtaydi.
+
+# ESLATMA: "KUCHLI_PAROL_BU_YERGA" o'rniga haqiqiy kuchli parol qo'ying
+# va uni keyinroq .env fayliga aynan shu holda yozasiz.
+
+
+========================================================================
+4-QADAM. REDIS O'RNATISH (Celery uchun kerak)
+========================================================================
+apt install -y redis-server
+systemctl enable --now redis-server
+redis-cli ping
+# Javob: PONG  (agar shunday chiqsa — ishlayapti)
+
+
+========================================================================
+5-QADAM. LOYIHA PAPKASINI YARATISH VA GITHUB'DAN YUKLASH
+========================================================================
+mkdir -p /opt/salary_system
+cd /opt/salary_system
+
+# Agar repo PRIVATE bo'lsa, GitHub Personal Access Token kerak bo'ladi:
+#   https://github.com/settings/tokens -> Generate new token (classic)
+#   -> "repo" huquqi bilan
+# Keyin quyidagicha clone qiling (TOKEN o'rniga o'zingiznikini qo'ying):
+git clone https://TOKEN@github.com/ALFAxxs/nsu-salary-project.git .
+
+# Agar repo PUBLIC bo'lsa, shunchaki:
+#   git clone https://github.com/ALFAxxs/nsu-salary-project.git .
+
+chown -R www-data:www-data /opt/salary_system
+
+
+========================================================================
+6-QADAM. PYTHON VIRTUAL ENVIRONMENT VA KUTUBXONALAR
+========================================================================
+cd /opt/salary_system
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install --upgrade pip
+pip install -r requirements.txt
+
+deactivate
+
+
+========================================================================
+7-QADAM. .env FAYLINI YARATISH (ENG MUHIM QADAM)
+========================================================================
+cd /opt/salary_system
+cp .env.example .env
+nano .env
+
+# Quyidagi qiymatlarni albatta HAQIQIY qiymatlarga almashtiring:
+#
+#   DJANGO_SECRET_KEY  — pastdagi komanda bilan generatsiya qiling:
+#
+source .venv/bin/activate
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+deactivate
+#   (chiqqan qatorni nusxalab .env dagi DJANGO_SECRET_KEY= ga qo'ying)
+#
+#   DEBUG=False                          <- productionda albatta False
+#   ALLOWED_HOSTS=oylik.example.uz,www.oylik.example.uz
+#
+#   POSTGRES_DB=salary_db
+#   POSTGRES_USER=salary_user
+#   POSTGRES_PASSWORD=<3-qadamda qo'ygan parolingiz>
+#   POSTGRES_HOST=127.0.0.1
+#   POSTGRES_PORT=5432
+#
+#   REDIS_URL=redis://127.0.0.1:6379/0
+#
+#   TELEGRAM_BOT_TOKEN=<@BotFather bergan token>
+#
+#   SECURE_SSL_REDIRECT=True             <- SSL sozlangandan keyin
+
+# Faylni saqlang: Ctrl+O, Enter, Ctrl+X (nano da)
+
+chmod 600 /opt/salary_system/.env
+chown www-data:www-data /opt/salary_system/.env
+
+
+========================================================================
+8-QADAM. DJANGO: MIGRATSIYA, STATIK FAYLLAR, SUPERUSER
+========================================================================
+cd /opt/salary_system
+source .venv/bin/activate
+
+export DJANGO_SETTINGS_MODULE=config.settings.prod
+
+python manage.py migrate
+python manage.py collectstatic --noinput
+python manage.py createsuperuser
+# (username, email, parol so'raladi — o'zingiz uchun admin akkaunt yarating)
+
+deactivate
+
+mkdir -p /opt/salary_system/logs /opt/salary_system/media
+chown -R www-data:www-data /opt/salary_system
+
+
+========================================================================
+9-QADAM. SYSTEMD SERVISLARINI O'RNATISH (Gunicorn, Celery, Bot)
+========================================================================
+cp /opt/salary_system/deploy/*.service /etc/systemd/system/
+
+systemctl daemon-reload
+
+systemctl enable --now salary-web.service
+systemctl enable --now salary-worker.service
+systemctl enable --now salary-beat.service
+systemctl enable --now salary-bot.service
+
+# Har birining holatini tekshiring:
+systemctl status salary-web.service
+systemctl status salary-worker.service
+systemctl status salary-beat.service
+systemctl status salary-bot.service
+# Barchasi "active (running)" bo'lishi kerak. Agar xato bo'lsa:
+#   journalctl -u salary-web.service -n 50 --no-pager
+#   (boshqa servislar uchun ham xuddi shunday, nomini almashtirib)
+
+
+========================================================================
+10-QADAM. NGINX SOZLASH (avval SSL'siz, keyin SSL bilan)
+========================================================================
+# 10.1 — nginx.conf faylida domeningizni to'g'irlang:
+nano /opt/salary_system/deploy/nginx.conf
+# "example.com" so'zini HAR IKKALA joyda ham o'zingizning haqiqiy
+# domeningizga almashtiring (masalan: oylik.example.uz)
+
+# 10.2 — SSL sertifikat hali yo'q, shuning uchun faylni VAQTINCHA
+# faqat 80-port (HTTP) bilan ishlaydigan qilib qo'yamiz. Faylning
+# ikkinchi (443 ssl) blokini vaqtincha butunlay o'chirib turing —
+# eng oson yo'li: 443-blokni "#" bilan izohga olish, YOKI birinchi
+# blokdagi "return 301 https://..." qatorini vaqtincha
+# "proxy_pass http://unix:/run/salary/salary.sock;" ga almashtirib turish.
+#
+# ENG ODDIY YECHIM — vaqtinchalik minimal config yozing:
+cat > /etc/nginx/sites-available/salary <<'EOF'
+server {
+    listen 80;
+    server_name oylik.example.uz www.oylik.example.uz;
+
+    client_max_body_size 12M;
+
+    location /static/ {
+        alias /opt/salary_system/staticfiles/;
+        expires 30d;
+    }
+    location / {
+        proxy_pass http://unix:/run/salary/salary.sock;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+# (yuqoridagi "oylik.example.uz" larni o'zingiznikiga almashtirib qo'ying)
+
+ln -s /etc/nginx/sites-available/salary /etc/nginx/sites-enabled/salary
+rm -f /etc/nginx/sites-enabled/default
+nginx -t
+systemctl restart nginx
+
+# Endi brauzerda http://oylik.example.uz ochilishi kerak (login sahifasi)
+
+
+========================================================================
+11-QADAM. SSL SERTIFIKAT OLISH (Let's Encrypt / Certbot)
+========================================================================
+apt install -y certbot python3-certbot-nginx
+
+certbot --nginx -d oylik.example.uz -d www.oylik.example.uz
+# So'ralganda: email kiriting, shartlarga rozilik bering,
+# "Redirect HTTP to HTTPS" — HA (2-variant) ni tanlang.
+
+# Certbot avtomatik ravishda nginx configni SSL bilan yangilaydi.
+# Endi to'liq deploy/nginx.conf dagi variantga (media/internal,
+# X-Forwarded-Proto va h.k.) mos kelishini tekshirib qo'yish uchun:
+diff /opt/salary_system/deploy/nginx.conf /etc/nginx/sites-available/salary
+# Farqlarni ko'rib, kerak bo'lsa /etc/nginx/sites-available/salary ni
+# deploy/nginx.conf dagi to'liq nusxaga moslashtirib tahrirlang
+# (ayniqsa /media/ location bloki — u boshlang'ich configda yo'q edi).
+nginx -t && systemctl reload nginx
+
+# .env faylida:
+nano /opt/salary_system/.env
+# SECURE_SSL_REDIRECT=True qilib qo'ying (agar hali qilmagan bo'lsangiz)
+systemctl restart salary-web.service
+
+
+========================================================================
+12-QADAM. TELEGRAM BOTNI TEKSHIRISH
+========================================================================
+journalctl -u salary-bot.service -f
+# "Bot starting (long polling)..." qatorini ko'rishingiz kerak.
+# Ctrl+C bilan chiqing.
+
+# Telegramda botingizni toping, /start bosing — javob kelishi kerak.
+
+
+========================================================================
+13-QADAM. YAKUNIY TEKSHIRUV RO'YXATI
+========================================================================
+[ ] https://oylik.example.uz ochilyapti va login sahifasi ko'rinyapti
+[ ] Superuser bilan /django-admin/ ga kirish ishlayapti
+[ ] Superuser bilan oddiy saytga (/ ) kirish ishlayapti
+[ ] Excel yuklash sahifasi ochilyapti (/imports/upload/)
+[ ] Telegram bot /start ga javob beryapti
+[ ] systemctl status barcha 4 ta servis uchun "active (running)"
+[ ] .env fayli 600 huquqida, faqat www-data o'qiy oladi
+[ ] DEBUG=False .env faylida
+
+
+========================================================================
+14-QADAM. FOYDALI KOMANDALAR (kelajakda kerak bo'ladi)
+========================================================================
+# Yangi kod GitHub'ga push qilingandan keyin serverni yangilash:
+cd /opt/salary_system
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+export DJANGO_SETTINGS_MODULE=config.settings.prod
+python manage.py migrate
+python manage.py collectstatic --noinput
+deactivate
+systemctl restart salary-web.service salary-worker.service salary-beat.service salary-bot.service
+
+# Loglarni ko'rish:
+journalctl -u salary-web.service -f
+journalctl -u salary-bot.service -f
+tail -f /opt/salary_system/logs/application.log
+tail -f /opt/salary_system/logs/telegram.log
+
+# Ma'lumotlar bazasidan zaxira olish:
+sudo -u postgres pg_dump salary_db > ~/salary_db_backup_$(date +%Y%m%d).sql
+
+# Superuser parolini tiklash:
+cd /opt/salary_system && source .venv/bin/activate
+export DJANGO_SETTINGS_MODULE=config.settings.prod
+python manage.py changepassword <username>
+
+
+========================================================================
+MUHIM ESLATMALAR
+========================================================================
+- .env faylini HECH QACHON GitHub'ga yubormang (allaqachon .gitignore
+  qilingan, lekin serverda ham ehtiyot bo'ling).
+- POSTGRES_PASSWORD va TELEGRAM_BOT_TOKEN faqat serverdagi .env
+  faylida bo'lishi kerak, boshqa hech qayerda emas.
+- Xodimlar ma'lumotlari (Excel fayllar) serverda /opt/salary_system/media/
+  papkasida saqlanadi — buni muntazam zaxiralab boring.
+- Har oy kamida bir marta `apt update && apt upgrade` qilib turing.
+========================================================================
