@@ -2,12 +2,18 @@
 Salary records (spec §10, §11).
 
 Design decisions:
-  * Unique per (employee, organization_unit, period_year, period_month): one
-    employee can be paid by more than one branch in the same month (they
-    genuinely worked at both), so uniqueness is scoped per branch too — not
-    just per employee+period. Each branch's own figure stays a separate,
-    independently visible row; only re-importing the SAME branch's data for
-    the same period revises that branch's own row.
+  * Unique per (employee, organization_unit, period_year, period_month,
+    payroll_employee_code): one employee can be paid by more than one
+    branch in the same month (they genuinely worked at both), so
+    uniqueness is scoped per branch too — not just per employee+period.
+    The same is true WITHIN one branch: a real payroll export can list the
+    same person twice under two different tabel numbers (two concurrent
+    positions/stakes, or an old record carrying a leftover balance
+    alongside a new one) — payroll_employee_code (a snapshot of that row's
+    own employee_code) is what tells those apart, so each stays its own
+    row and gets its own notification, exactly like the cross-branch case.
+    Only re-importing the SAME branch+tabel-number's data for the same
+    period revises that specific row.
   * organization_unit is a snapshot of who paid this specific salary, set
     once at creation and never changed — deliberately independent of
     Employee.organization_unit, which just tracks whoever most recently
@@ -55,6 +61,13 @@ class Salary(models.Model):
     # being telegram-linked is no longer enough on its own — this must also
     # match Employee.jshshir, or the message is held back for review.
     payroll_jshshir = models.CharField(_("payroll JSHSHIR"), max_length=14, blank=True)
+    # This row's own employee_code/tabel number, as it appeared in the
+    # payroll file — the disambiguator when the same employee (same phone
+    # or JSHSHIR) appears more than once in one branch's file for the same
+    # period (two positions, two stakes, ...). Blank is its own valid value
+    # for files with no employee_code column at all — in that case there's
+    # only ever one row per employee per branch per period, same as before.
+    payroll_employee_code = models.CharField(_("payroll employee code"), max_length=64, blank=True)
 
     gross_salary = models.DecimalField(
         _("gross salary"), max_digits=14, decimal_places=2, default=Decimal("0")
@@ -104,13 +117,18 @@ class Salary(models.Model):
             models.Index(fields=["organization_unit"]),
         ]
         constraints = [
-            # At most one CURRENT salary per employee, per period, PER BRANCH —
-            # the same employee can have two current salaries for the same
-            # month if two different branches both paid them.
+            # At most one CURRENT salary per employee, per period, per branch,
+            # per payroll tabel-number — the same employee can have more than
+            # one current salary for the same month+branch if the payroll
+            # file itself lists them more than once (two positions/stakes),
+            # each under its own employee_code. Re-importing the SAME
+            # employee_code's row for that period+branch revises it in place;
+            # a DIFFERENT employee_code for the same person is a separate row.
             models.UniqueConstraint(
-                fields=["employee", "organization_unit", "period_year", "period_month"],
+                fields=["employee", "organization_unit", "period_year", "period_month",
+                       "payroll_employee_code"],
                 condition=models.Q(is_current=True),
-                name="unique_current_salary_per_period_per_unit",
+                name="unique_current_salary_per_period_per_unit_per_code",
             ),
             models.CheckConstraint(
                 condition=models.Q(period_month__gte=1) & models.Q(period_month__lte=12),

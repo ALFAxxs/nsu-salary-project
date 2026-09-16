@@ -245,7 +245,7 @@ class ExcelValidationService:
         by_phone = {e.normalized_phone: e for e in active_employees}
         by_jshshir = {e.jshshir: e for e in active_employees if e.jshshir}
 
-        seen_employee_ids: set[int] = set()
+        seen_employee_ids: set[tuple[int, str]] = set()  # (employee_id, employee_code)
         seen_new_phones: set[str] = set()
         seen_new_jshshirs: set[str] = set()
         row_number = 1  # header was row 1
@@ -395,10 +395,18 @@ class ExcelValidationService:
                     "Bu xodim ro'yxatda topilmadi — avval uni Xodimlar bo'limida ro'yxatdan o'tkazing"
                 )
         else:
-            if employee.id in seen_ids:
-                rr.errors.append("Faylda bu xodim takrorlangan")
+            # A real payroll export can legitimately list the same person
+            # twice under two different tabel numbers (two concurrent
+            # positions/stakes) — that's not a duplicate, it's two separate
+            # entries that each get their own current Salary row and their
+            # own notification (see Salary's uniqueness constraint). Only a
+            # row sharing BOTH the same employee AND the same employee_code
+            # is a true duplicate.
+            dedup_key = (employee.id, code)
+            if dedup_key in seen_ids:
+                rr.errors.append("Faylda bu xodim (bir xil kod bilan) takrorlangan")
             else:
-                seen_ids.add(employee.id)
+                seen_ids.add(dedup_key)
             rr.employee_id = employee.id
             rr.telegram_linked = employee.is_telegram_linked
 

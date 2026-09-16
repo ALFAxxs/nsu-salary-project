@@ -112,6 +112,7 @@ class SalaryImportService:
                 net=norm.get("net_salary", "0"),
                 components=row.get("components", []),
                 payroll_jshshir=norm.get("jshshir", ""),
+                payroll_employee_code=norm.get("employee_code", ""),
             )
             try:
                 with transaction.atomic():
@@ -133,14 +134,18 @@ class SalaryImportService:
 
     @staticmethod
     def _upsert_salary(*, salary_import, employee_id, gross, advance, deductions, net,
-                       components=None, payroll_jshshir=""):
+                       components=None, payroll_jshshir="", payroll_employee_code=""):
         from decimal import Decimal
 
         year, month = salary_import.period_year, salary_import.period_month
         unit = salary_import.organization_unit
-        # Scoped by branch too: an employee can have a separate current
-        # salary per branch for the same month (they worked at more than
-        # one). Only re-importing THIS SAME branch's data revises it.
+        code = payroll_employee_code or ""
+        # Scoped by branch AND by this row's own employee_code too: an
+        # employee can have more than one current salary for the same
+        # branch+month if the payroll file itself lists them more than once
+        # (two positions/stakes, each under its own tabel number) — see
+        # Salary's uniqueness constraint. Only re-importing THIS SAME
+        # branch+code's row revises it; a different code is a separate row.
         existing = (
             Salary.objects.select_for_update()
             .filter(
@@ -148,6 +153,7 @@ class SalaryImportService:
                 organization_unit=unit,
                 period_year=year,
                 period_month=month,
+                payroll_employee_code=code,
                 is_current=True,
             )
             .first()
@@ -185,6 +191,7 @@ class SalaryImportService:
             net_salary=net_d,
             components=components or [],
             payroll_jshshir=payroll_jshshir or "",
+            payroll_employee_code=code,
             source_import=salary_import,
             is_current=True,
             revision=next_revision,

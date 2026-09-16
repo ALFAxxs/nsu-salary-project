@@ -757,3 +757,112 @@ class ImportValidationTests(TestCase):
 
         self.assertFalse(Employee.objects.filter(normalized_phone="998900000099").exists())
         self.assertFalse(Salary.objects.filter(net_salary=3000000).exists())
+
+
+class MultiPositionSameBranchTests(TestCase):
+    """A real payroll export can legitimately list the same person twice in
+    ONE branch's file for the SAME period, under two different tabel
+    numbers (two concurrent positions/stakes). Each must survive as its
+    own current Salary row and get its own notification — same treatment
+    as the existing cross-branch case, just within one branch. Only a row
+    repeating the SAME employee_code is a true duplicate."""
+
+    def setUp(self):
+        _, self.b1, _ = make_org()
+        self.emp = Employee.objects.create(
+            full_name="Ikki stavkali xodim", phone="998901110099",
+            organization_unit=self.b1)
+
+    def _excel(self, rows):
+        import io
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["employee_code", "phone", "full_name", "gross_salary",
+                   "advance", "deductions", "net_salary"])
+        for r in rows:
+            ws.append(r)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    def test_different_employee_codes_both_valid(self):
+        f = self._excel([
+            ["0000-01220", "998901110099", "Ikki stavkali xodim", 2500000, 0, 0, 2440322],
+            ["0100-00040", "998901110099", "Ikki stavkali xodim", 13114025, 1704823, 1704823, 11409202],
+        ])
+        report = ExcelValidationService(organization_unit=self.b1).validate(f)
+        self.assertEqual(report.error_rows, 0)
+        self.assertEqual(report.valid_rows, 2)
+        self.assertEqual(report.rows[0].employee_id, self.emp.id)
+        self.assertEqual(report.rows[1].employee_id, self.emp.id)
+
+    def test_same_employee_code_twice_is_still_a_duplicate(self):
+        f = self._excel([
+            ["0000-01220", "998901110099", "Ikki stavkali xodim", 2500000, 0, 0, 2440322],
+            ["0000-01220", "998901110099", "Ikki stavkali xodim", 2500000, 0, 0, 2440322],
+        ])
+        report = ExcelValidationService(organization_unit=self.b1).validate(f)
+        self.assertEqual(report.valid_rows, 1)
+        self.assertEqual(report.error_rows, 1)
+        self.assertTrue(any("takrorlangan" in e for e in report.rows[1].errors))
+
+    def test_confirm_creates_two_current_salaries_and_two_messages(self):
+        f = self._excel([
+            ["0000-01220", "998901110099", "Ikki stavkali xodim", 2500000, 0, 0, 2440322],
+            ["0100-00040", "998901110099", "Ikki stavkali xodim", 13114025, 1704823, 1704823, 11409202],
+        ])
+        report = ExcelValidationService(organization_unit=self.b1).validate(f)
+        imp = SalaryImport.objects.create(
+            organization_unit=self.b1, period_year=2026, period_month=8,
+            file_name="x.xlsx",
+            uploaded_by=User.objects.create_user("u7", password="x", role=Role.SUPER_ADMIN))
+        imp.validation_payload = report.to_payload()
+        imp.valid_rows, imp.error_rows = report.valid_rows, report.error_rows
+        imp.status = ImportStatus.VALID
+        imp.save()
+
+        SalaryImportService.confirm_and_commit(imp, user=imp.uploaded_by)
+
+        current = Salary.objects.filter(employee=self.emp, is_current=True)
+        self.assertEqual(current.count(), 2)
+        self.assertEqual(
+            set(current.values_list("net_salary", flat=True)),
+            {Decimal("2440322"), Decimal("11409202")},
+        )
+
+        summary = SalaryNotificationService.prepare_for_import(imp)
+        self.assertEqual(summary["prepared"], 2)
+        self.assertEqual(TelegramMessage.objects.filter(employee=self.emp).count(), 2)
+
+    def test_reimporting_one_codes_row_revises_only_that_one(self):
+        imp1 = SalaryImport.objects.create(
+            organization_unit=self.b1, period_year=2026, period_month=8, file_name="x.xlsx",
+            uploaded_by=User.objects.create_user("u8", password="x", role=Role.SUPER_ADMIN))
+        SalaryImportService._upsert_salary(
+            salary_import=imp1, employee_id=self.emp.id,
+            gross="2500000", advance="0", deductions="0", net="2440322",
+            payroll_employee_code="0000-01220")
+        SalaryImportService._upsert_salary(
+            salary_import=imp1, employee_id=self.emp.id,
+            gross="13114025", advance="1704823", deductions="1704823", net="11409202",
+            payroll_employee_code="0100-00040")
+
+        # A later file corrects only the second tabel-number's figure.
+        imp2 = SalaryImport.objects.create(
+            organization_unit=self.b1, period_year=2026, period_month=8, file_name="y.xlsx",
+            uploaded_by=User.objects.create_user("u9", password="x", role=Role.SUPER_ADMIN))
+        SalaryImportService._upsert_salary(
+            salary_import=imp2, employee_id=self.emp.id,
+            gross="13200000", advance="1704823", deductions="1704823", net="11495177",
+            payroll_employee_code="0100-00040")
+
+        current = Salary.objects.filter(employee=self.emp, is_current=True)
+        self.assertEqual(current.count(), 2)  # still one per tabel-number
+        first = current.get(payroll_employee_code="0000-01220")
+        self.assertEqual(first.net_salary, Decimal("2440322"))
+        self.assertEqual(first.revision, 1)  # untouched
+        second = current.get(payroll_employee_code="0100-00040")
+        self.assertEqual(second.net_salary, Decimal("11495177"))
+        self.assertEqual(second.revision, 2)  # revised
