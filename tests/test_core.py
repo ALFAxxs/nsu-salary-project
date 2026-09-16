@@ -19,8 +19,13 @@ from apps.employees.services import EmployeeRegistrationService, LinkResult
 from apps.imports.models import ImportStatus, SalaryImport
 from apps.imports.services import SalaryImportService
 from apps.imports.validators import ExcelValidationService
-from apps.notifications.models import MessageStatus, TelegramMessage
-from apps.notifications.services import SalaryNotificationService
+from apps.notifications.models import (
+    BroadcastMessage,
+    BroadcastRecipient,
+    MessageStatus,
+    TelegramMessage,
+)
+from apps.notifications.services import BroadcastService, SalaryNotificationService
 from apps.organizations.models import OrganizationUnit, UnitType
 from apps.salaries.models import Salary
 from apps.salaries.selectors import salaries_for
@@ -866,3 +871,103 @@ class MultiPositionSameBranchTests(TestCase):
         second = current.get(payroll_employee_code="0100-00040")
         self.assertEqual(second.net_salary, Decimal("11495177"))
         self.assertEqual(second.revision, 2)  # revised
+
+
+class BroadcastTests(TestCase):
+    """Superadmin-only free-text announcements to every telegram-linked
+    employee, or to one branch's."""
+
+    def setUp(self):
+        _, self.b1, self.b2 = make_org()
+        self.linked_b1 = Employee.objects.create(
+            full_name="Ulangan B1", phone="998901110001",
+            organization_unit=self.b1, telegram_id=111)
+        self.unlinked_b1 = Employee.objects.create(
+            full_name="Ulanmagan B1", phone="998901110002",
+            organization_unit=self.b1)  # no telegram_id
+        self.linked_b2 = Employee.objects.create(
+            full_name="Ulangan B2", phone="998902220001",
+            organization_unit=self.b2, telegram_id=222)
+        self.superadmin = User.objects.create_user(
+            "super1", password="x", role=Role.SUPER_ADMIN)
+        self.branch_admin = User.objects.create_user(
+            "branch1", password="x", role=Role.BRANCH_ADMIN, organization_unit=self.b1)
+
+    def _mocks(self):
+        from unittest.mock import MagicMock, patch
+        return (
+            patch("apps.notifications.tasks.settings.TELEGRAM_BOT_TOKEN", "test-token"),
+            patch("apps.notifications.tasks.requests.post", return_value=MagicMock(
+                status_code=200, json=lambda: {"result": {"message_id": 1}})),
+        )
+
+    def test_eligible_employees_scoping(self):
+        everyone = BroadcastService.eligible_employees()
+        self.assertEqual(set(everyone), {self.linked_b1, self.linked_b2})  # unlinked excluded
+
+        only_b1 = BroadcastService.eligible_employees(self.b1)
+        self.assertEqual(set(only_b1), {self.linked_b1})
+
+    def test_create_and_dispatch_sends_to_everyone(self):
+        token_patch, post_patch = self._mocks()
+        with token_patch, post_patch as mock_post:
+            with self.captureOnCommitCallbacks(execute=True):
+                broadcast = BroadcastService.create_and_dispatch(
+                    text="Ertaga bayram, dam olish kuni!", organization_unit=None,
+                    created_by=self.superadmin,
+                )
+        self.assertEqual(BroadcastRecipient.objects.filter(broadcast=broadcast).count(), 2)
+        self.assertEqual(mock_post.call_count, 2)
+        self.assertEqual(
+            set(BroadcastRecipient.objects.filter(broadcast=broadcast)
+                .values_list("status", flat=True)),
+            {MessageStatus.SENT},
+        )
+
+    def test_create_and_dispatch_scoped_to_one_branch(self):
+        token_patch, post_patch = self._mocks()
+        with token_patch, post_patch as mock_post:
+            with self.captureOnCommitCallbacks(execute=True):
+                broadcast = BroadcastService.create_and_dispatch(
+                    text="Filial 1 uchun e'lon", organization_unit=self.b1,
+                    created_by=self.superadmin,
+                )
+        recipients = BroadcastRecipient.objects.filter(broadcast=broadcast)
+        self.assertEqual(recipients.count(), 1)
+        self.assertEqual(recipients.first().employee_id, self.linked_b1.id)
+        self.assertEqual(mock_post.call_count, 1)
+
+    def test_send_task_never_calls_bot_api_twice_for_one_recipient(self):
+        from apps.notifications.tasks import send_broadcast_message
+
+        broadcast = BroadcastMessage.objects.create(text="Test", created_by=self.superadmin)
+        recipient = BroadcastRecipient.objects.create(
+            broadcast=broadcast, employee=self.linked_b1, telegram_id=self.linked_b1.telegram_id,
+        )
+        token_patch, post_patch = self._mocks()
+        with token_patch, post_patch as mock_post:
+            send_broadcast_message.run(recipient.pk)
+            send_broadcast_message.run(recipient.pk)  # simulated duplicate dispatch
+        self.assertEqual(mock_post.call_count, 1)
+        recipient.refresh_from_db()
+        self.assertEqual(recipient.status, MessageStatus.SENT)
+
+    def test_web_view_requires_superadmin(self):
+        c = Client()
+        c.login(username="branch1", password="x")
+        resp = c.get(reverse("notifications:broadcast_list"))
+        self.assertEqual(resp.status_code, 403)
+        resp = c.post(reverse("notifications:broadcast_create"), {"text": "Salom", "organization_unit": ""})
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(BroadcastMessage.objects.count(), 0)
+
+    def test_web_view_allows_superadmin_and_creates_broadcast(self):
+        c = Client()
+        c.login(username="super1", password="x")
+        token_patch, post_patch = self._mocks()
+        with token_patch, post_patch:
+            resp = c.post(reverse("notifications:broadcast_create"),
+                          {"text": "Hammaga salom", "organization_unit": ""})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(BroadcastMessage.objects.count(), 1)
+        self.assertEqual(BroadcastMessage.objects.first().text, "Hammaga salom")

@@ -22,7 +22,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from apps.notifications.models import MessageStatus, TelegramMessage
+from apps.notifications.models import BroadcastRecipient, MessageStatus, TelegramMessage
 from apps.notifications.services import format_salary_message
 
 logger = logging.getLogger("apps.notifications")
@@ -223,3 +223,141 @@ def finalize_import(import_id: int, checks: int = 0) -> None:
     else:
         # Check again shortly; retries may still be in flight.
         finalize_import.apply_async(args=[import_id, checks + 1], countdown=30)
+
+
+# --------------------------------------------------------------------- #
+# Broadcasts (superadmin-only free-text announcements) — same dispatch/
+# claim/retry/finalize shape as the salary-notification tasks above, just
+# against BroadcastRecipient instead of TelegramMessage.
+# --------------------------------------------------------------------- #
+@shared_task(ignore_result=True)
+def dispatch_broadcast(broadcast_id: int) -> None:
+    recipient_ids = list(
+        BroadcastRecipient.objects.filter(
+            broadcast_id=broadcast_id,
+            status__in=[MessageStatus.PENDING, MessageStatus.RETRYING],
+        ).values_list("id", flat=True)
+    )
+    rate = max(1, int(getattr(settings, "TELEGRAM_SEND_RATE_LIMIT", 25)))
+    logger.info("dispatch_broadcast: broadcast %s -> %s recipients", broadcast_id, len(recipient_ids))
+
+    for i, rid in enumerate(recipient_ids):
+        countdown = i // rate
+        send_broadcast_message.apply_async(args=[rid], countdown=countdown)
+
+    finalize_broadcast.apply_async(
+        args=[broadcast_id],
+        countdown=(len(recipient_ids) // rate) + 5,
+    )
+
+
+@shared_task(
+    bind=True,
+    max_retries=None,
+    ignore_result=True,
+)
+def send_broadcast_message(self, recipient_id: int) -> None:
+    token = settings.TELEGRAM_BOT_TOKEN
+    max_attempts = int(getattr(settings, "TELEGRAM_MAX_ATTEMPTS", 3))
+
+    # Same atomic claim as send_salary_message — a double dispatch (double
+    # click on Send, or a resend racing an in-flight retry) must not reach
+    # the Bot API twice for the same recipient.
+    claimed = BroadcastRecipient.objects.filter(
+        pk=recipient_id, status__in=[MessageStatus.PENDING, MessageStatus.RETRYING],
+    ).update(status=MessageStatus.SENDING, updated_at=timezone.now())
+    if not claimed:
+        return
+
+    try:
+        recipient = (
+            BroadcastRecipient.objects.select_related("broadcast", "employee")
+            .get(pk=recipient_id)
+        )
+    except BroadcastRecipient.DoesNotExist:
+        return
+
+    if not token:
+        recipient.status = MessageStatus.FAILED
+        recipient.error_message = "TELEGRAM_BOT_TOKEN not configured"
+        recipient.save(update_fields=["status", "error_message", "updated_at"])
+        return
+
+    recipient.attempts += 1
+    text = recipient.broadcast.text
+
+    try:
+        resp = requests.post(
+            BOT_API.format(token=token),
+            json={"chat_id": recipient.telegram_id, "text": text},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.warning("send_broadcast: network error emp=%s: %s", recipient.employee_id, exc)
+        _handle_transient(self, recipient, str(exc), max_attempts)
+        return
+
+    if resp.status_code == 200:
+        data = resp.json()
+        recipient.status = MessageStatus.SENT
+        recipient.sent_at = timezone.now()
+        recipient.message_id = data.get("result", {}).get("message_id")
+        recipient.error_message = ""
+        recipient.save(update_fields=[
+            "status", "sent_at", "message_id", "attempts", "error_message", "updated_at",
+        ])
+        logger.info("send_broadcast: OK emp=%s", recipient.employee_id)
+        return
+
+    try:
+        description = resp.json().get("description", "")
+    except ValueError:
+        description = resp.text[:200]
+
+    lowered = description.lower()
+    if resp.status_code == 403 or any(m in lowered for m in _BLOCKED_MARKERS):
+        recipient.status = MessageStatus.BLOCKED
+        recipient.error_message = description
+        recipient.save(update_fields=["status", "attempts", "error_message", "updated_at"])
+        logger.info("send_broadcast: BLOCKED emp=%s", recipient.employee_id)
+        return
+
+    if resp.status_code == 429:
+        retry_after = int(resp.json().get("parameters", {}).get("retry_after", 3))
+        _handle_transient(self, recipient, "429 rate limited", max_attempts,
+                          countdown=retry_after)
+        return
+
+    if 500 <= resp.status_code < 600:
+        _handle_transient(self, recipient, f"{resp.status_code} server error", max_attempts)
+        return
+
+    recipient.status = MessageStatus.FAILED
+    recipient.error_message = f"{resp.status_code}: {description}"
+    recipient.save(update_fields=["status", "attempts", "error_message", "updated_at"])
+    logger.info("send_broadcast: FAILED emp=%s status=%s", recipient.employee_id, resp.status_code)
+
+
+@shared_task(ignore_result=True)
+def finalize_broadcast(broadcast_id: int, checks: int = 0) -> None:
+    stale_cutoff = timezone.now() - STUCK_SENDING_TIMEOUT
+    stale_ids = list(
+        BroadcastRecipient.objects.filter(
+            broadcast_id=broadcast_id,
+            status=MessageStatus.SENDING,
+            updated_at__lt=stale_cutoff,
+        ).values_list("id", flat=True)
+    )
+    if stale_ids:
+        BroadcastRecipient.objects.filter(id__in=stale_ids).update(status=MessageStatus.RETRYING)
+        for rid in stale_ids:
+            send_broadcast_message.apply_async(args=[rid], countdown=5)
+        logger.warning("finalize_broadcast: recovered %s stuck SENDING recipient(s) for broadcast %s",
+                       len(stale_ids), broadcast_id)
+
+    still_pending = BroadcastRecipient.objects.filter(
+        broadcast_id=broadcast_id,
+        status__in=[MessageStatus.PENDING, MessageStatus.RETRYING, MessageStatus.SENDING],
+    ).exists()
+    if still_pending and checks < MAX_FINALIZE_CHECKS:
+        finalize_broadcast.apply_async(args=[broadcast_id, checks + 1], countdown=30)

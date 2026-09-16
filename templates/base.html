@@ -38,6 +38,7 @@
       {% if nav_can_manage_admins %}
       <a href="{% url 'accounts:admin_list' %}" class="nav-link {% block nav_admins %}{% endblock %}"><i class="bi bi-shield-lock"></i> Administratorlar</a>
       <a href="{% url 'audit:list' %}" class="nav-link {% block nav_audit %}{% endblock %}"><i class="bi bi-journal-text"></i> Audit Log</a>
+      <a href="{% url 'notifications:broadcast_list' %}" class="nav-link {% block nav_broadcast %}{% endblock %}"><i class="bi bi-megaphone"></i> Umumiy xabar</a>
       {% endif %}
     </nav>
   </aside>

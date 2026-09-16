@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Umumiy xabarlar{% endblock %}
+{% block page_title %}Umumiy xabarlar{% endblock %}
+{% block nav_notifications %}active{% endblock %}
+{% block content %}
+<a href="{% url 'notifications:broadcast_create' %}" class="btn btn-primary mb-3"><i class="bi bi-megaphone"></i> Yangi umumiy xabar</a>
+
+<div class="card"><div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead class="table-light"><tr><th>Sana</th><th>Kimlarga</th><th>Matn</th><th>Yuborgan</th><th>Yuborilgan</th><th>Xato</th></tr></thead>
+  <tbody>
+  {% for row in page %}
+    <tr>
+      <td>{{ row.broadcast.created_at|date:"d.m.Y H:i" }}</td>
+      <td>{{ row.broadcast.organization_unit.name|default:"Barcha filiallar" }}</td>
+      <td><a href="{% url 'notifications:broadcast_detail' row.broadcast.pk %}">{{ row.broadcast.text|truncatechars:60 }}</a></td>
+      <td>{{ row.broadcast.created_by.get_full_name|default:row.broadcast.created_by.username|default:"—" }}</td>
+      <td><span class="badge badge-green">{{ row.sent }} / {{ row.total }}</span></td>
+      <td>{% if row.failed %}<span class="badge badge-red">{{ row.failed }}</span>{% else %}—{% endif %}</td>
+    </tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Hali umumiy xabar yuborilmagan</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

@@ -17,7 +17,12 @@ from __future__ import annotations
 from django.db import transaction
 
 from apps.imports.models import SalaryImport
-from apps.notifications.models import MessageStatus, TelegramMessage
+from apps.notifications.models import (
+    BroadcastMessage,
+    BroadcastRecipient,
+    MessageStatus,
+    TelegramMessage,
+)
 from apps.salaries.models import Salary
 
 
@@ -184,3 +189,37 @@ class SalaryNotificationService:
             transaction.on_commit(lambda pk=msg.pk: send_salary_message.delay(pk))
             dispatched += 1
         return dispatched
+
+
+class BroadcastService:
+    """Free-text announcements to every telegram-linked employee, or to one
+    branch's — separate from salary notifications. Gating (superadmin-only)
+    is the caller's responsibility (see apps.notifications.views); this
+    service only builds the recipient list and dispatches."""
+
+    @staticmethod
+    def eligible_employees(organization_unit=None):
+        from apps.employees.models import Employee
+
+        qs = Employee.objects.filter(is_active=True, telegram_id__isnull=False)
+        if organization_unit is not None:
+            qs = qs.filter(organization_unit=organization_unit)
+        return qs
+
+    @staticmethod
+    @transaction.atomic
+    def create_and_dispatch(*, text: str, organization_unit, created_by) -> BroadcastMessage:
+        from apps.notifications.tasks import dispatch_broadcast
+
+        broadcast = BroadcastMessage.objects.create(
+            text=text, organization_unit=organization_unit, created_by=created_by,
+        )
+        recipients = list(BroadcastService.eligible_employees(organization_unit))
+        BroadcastRecipient.objects.bulk_create([
+            BroadcastRecipient(broadcast=broadcast, employee=emp, telegram_id=emp.telegram_id)
+            for emp in recipients
+        ])
+        # Same reasoning as recheck_after_link: defer past this transaction's
+        # commit so the worker's separate connection always finds the rows.
+        transaction.on_commit(lambda: dispatch_broadcast.delay(broadcast.pk))
+        return broadcast

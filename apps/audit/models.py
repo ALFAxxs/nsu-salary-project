@@ -38,6 +38,7 @@ class AuditAction(models.TextChoices):
     EMPLOYEE_ACTIVATED = "EMPLOYEE_ACTIVATED", _("Employee activated")
     EMPLOYEE_DEACTIVATED = "EMPLOYEE_DEACTIVATED", _("Employee deactivated")
     EMPLOYEE_DELETED = "EMPLOYEE_DELETED", _("Employee deleted")
+    BROADCAST_SENT = "BROADCAST_SENT", _("Broadcast sent")
 
 
 class AuditLog(models.Model):

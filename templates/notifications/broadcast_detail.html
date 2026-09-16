@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Umumiy xabar{% endblock %}
+{% block page_title %}Umumiy xabar tafsiloti{% endblock %}
+{% block nav_notifications %}active{% endblock %}
+{% block content %}
+<div class="card mb-3"><div class="card-body">
+  <p class="mb-1"><strong>Kimlarga:</strong> {{ broadcast.organization_unit.name|default:"Barcha filiallar" }}</p>
+  <p class="mb-1"><strong>Yuborgan:</strong> {{ broadcast.created_by.get_full_name|default:broadcast.created_by.username|default:"—" }} — {{ broadcast.created_at|date:"d.m.Y H:i" }}</p>
+  <p class="mb-0"><strong>Matn:</strong></p>
+  <p class="mb-0" style="white-space:pre-wrap">{{ broadcast.text }}</p>
+</div></div>
+
+<div class="stat-grid">
+  <div class="stat-card blue"><div class="label">Jami</div><div class="value">{{ counts.total }}</div></div>
+  <div class="stat-card yellow"><div class="label">Kutilmoqda</div><div class="value">{{ counts.pending }}</div></div>
+  <div class="stat-card green"><div class="label">Yuborilgan</div><div class="value">{{ counts.sent }}</div></div>
+  <div class="stat-card red"><div class="label">Xato / Blok</div><div class="value">{{ counts.failed }}</div></div>
+</div>
+
+<a href="{% url 'notifications:broadcast_list' %}" class="btn btn-outline-primary mb-3">Barcha umumiy xabarlar</a>
+
+{% if failed %}
+<div class="card mt-2">
+  <div class="card-header bg-white fw-semibold text-danger">Xato / Blok ({{ counts.failed }})</div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>F.I.Sh</th><th>Telefon</th><th>Xato</th></tr></thead>
+    <tbody>{% for r in failed %}<tr>
+      <td>{{ r.employee.full_name }}</td>
+      <td>{{ r.employee.normalized_phone }}</td>
+      <td class="small text-muted">{{ r.error_message|default:"—" }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

@@ -74,3 +74,81 @@ class TelegramMessage(models.Model):
 
     def __str__(self) -> str:
         return f"Msg emp={self.employee_id} salary={self.salary_id} {self.status}"
+
+
+class BroadcastMessage(models.Model):
+    """
+    A free-text announcement to every telegram-linked employee, or to one
+    branch's — separate from salary notifications entirely. Superadmin-only
+    (see apps.accounts.models.User.can_manage_admins): this reaches
+    everyone at once, so it isn't a per-branch admin action.
+    """
+    text = models.TextField(_("text"))
+    # null = every branch; set = only that branch's currently-linked employees.
+    organization_unit = models.ForeignKey(
+        "organizations.OrganizationUnit",
+        on_delete=models.CASCADE,
+        related_name="broadcasts",
+        null=True,
+        blank=True,
+        verbose_name=_("organization unit"),
+    )
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="broadcasts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("broadcast message")
+        verbose_name_plural = _("broadcast messages")
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        scope = self.organization_unit.name if self.organization_unit_id else "barcha filiallar"
+        return f"Broadcast #{self.pk} ({scope}, {self.created_at:%Y-%m-%d %H:%M})"
+
+
+class BroadcastRecipient(models.Model):
+    """One delivery record per (broadcast, employee) — same shape and same
+    atomic-claim send pattern as TelegramMessage, so a double dispatch of
+    the send button can't double-send to hundreds of people either."""
+    broadcast = models.ForeignKey(
+        BroadcastMessage, on_delete=models.CASCADE, related_name="recipients"
+    )
+    employee = models.ForeignKey(
+        "employees.Employee", on_delete=models.CASCADE, related_name="broadcast_recipients"
+    )
+    telegram_id = models.BigIntegerField(_("telegram id"))
+    message_id = models.BigIntegerField(_("telegram message id"), null=True, blank=True)
+
+    status = models.CharField(
+        _("status"), max_length=32, choices=MessageStatus.choices,
+        default=MessageStatus.PENDING,
+    )
+    attempts = models.PositiveSmallIntegerField(_("attempts"), default=0)
+    sent_at = models.DateTimeField(_("sent at"), null=True, blank=True)
+    error_message = models.TextField(_("error message"), blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("broadcast recipient")
+        verbose_name_plural = _("broadcast recipients")
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["broadcast"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["broadcast", "employee"],
+                name="unique_broadcast_recipient",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"BroadcastRecipient broadcast={self.broadcast_id} emp={self.employee_id} {self.status}"

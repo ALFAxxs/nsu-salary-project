@@ -20,9 +20,10 @@ from apps.accounts.permissions import scope_messages
 from apps.audit.models import AuditAction
 from apps.audit.services import AuditService
 from apps.imports.selectors import get_import_for
-from apps.notifications.models import MessageStatus, TelegramMessage
-from apps.notifications.services import SalaryNotificationService
+from apps.notifications.models import BroadcastMessage, MessageStatus, TelegramMessage
+from apps.notifications.services import BroadcastService, SalaryNotificationService
 from apps.notifications.tasks import dispatch_import_notifications, send_salary_message
+from apps.organizations.models import OrganizationUnit
 
 
 @login_required
@@ -123,3 +124,91 @@ def resend_message(request, pk: int):
     else:
         messages.warning(request, "Xodim Telegramga ulanmagan.")
     return redirect("notifications:list")
+
+
+# --------------------------------------------------------------------- #
+# Broadcasts — free-text announcement to every telegram-linked employee,
+# or to one branch's. Superadmin-only: this reaches everyone at once,
+# unlike everything else here which is scoped to the admin's own branch(es).
+# --------------------------------------------------------------------- #
+@login_required
+@require_role_check("can_manage_admins")
+def broadcast_list(request):
+    broadcasts = BroadcastMessage.objects.select_related(
+        "organization_unit", "created_by"
+    ).prefetch_related("recipients")
+    rows = []
+    for b in broadcasts:
+        recipients = list(b.recipients.all())
+        rows.append({
+            "broadcast": b,
+            "total": len(recipients),
+            "sent": sum(1 for r in recipients if r.status == MessageStatus.SENT),
+            "failed": sum(1 for r in recipients
+                         if r.status in (MessageStatus.FAILED, MessageStatus.BLOCKED)),
+        })
+    paginator = Paginator(rows, 20)
+    page = paginator.get_page(request.GET.get("page"))
+    return render(request, "notifications/broadcast_list.html", {"page": page})
+
+
+@login_required
+@require_role_check("can_manage_admins")
+def broadcast_create(request):
+    units = OrganizationUnit.objects.filter(is_active=True).order_by("name")
+    if request.method == "POST":
+        text = (request.POST.get("text") or "").strip()
+        unit_id = request.POST.get("organization_unit") or ""
+        unit = units.filter(pk=unit_id).first() if unit_id else None
+
+        if not text:
+            messages.error(request, "Xabar matni bo'sh bo'lishi mumkin emas.")
+            return render(request, "notifications/broadcast_form.html", {
+                "units": units, "text": text, "selected_unit": unit_id,
+            })
+
+        recipient_count = BroadcastService.eligible_employees(unit).count()
+        if recipient_count == 0:
+            messages.warning(request, "Bu doirada botga ulangan xodim topilmadi — hech kimga yuborilmadi.")
+            return render(request, "notifications/broadcast_form.html", {
+                "units": units, "text": text, "selected_unit": unit_id,
+            })
+
+        broadcast = BroadcastService.create_and_dispatch(
+            text=text, organization_unit=unit, created_by=request.user,
+        )
+        AuditService.log(AuditAction.BROADCAST_SENT, obj=broadcast, metadata={
+            "unit": unit.code if unit else "ALL", "recipients": recipient_count,
+        })
+        messages.success(request, f"Xabar {recipient_count} ta xodimga yuborish navbatga qo'yildi.")
+        return redirect("notifications:broadcast_detail", pk=broadcast.pk)
+
+    return render(request, "notifications/broadcast_form.html", {
+        "units": units, "text": "", "selected_unit": "",
+    })
+
+
+@login_required
+@require_role_check("can_manage_admins")
+def broadcast_detail(request, pk: int):
+    broadcast = BroadcastMessage.objects.select_related(
+        "organization_unit", "created_by"
+    ).filter(pk=pk).first()
+    if broadcast is None:
+        raise Http404
+    recipients = broadcast.recipients.select_related("employee")
+    counts = {
+        "total": recipients.count(),
+        "pending": recipients.filter(
+            status__in=[MessageStatus.PENDING, MessageStatus.RETRYING, MessageStatus.SENDING]
+        ).count(),
+        "sent": recipients.filter(status=MessageStatus.SENT).count(),
+        "failed": recipients.filter(
+            status__in=[MessageStatus.FAILED, MessageStatus.BLOCKED]).count(),
+    }
+    failed = recipients.filter(
+        status__in=[MessageStatus.FAILED, MessageStatus.BLOCKED]
+    )[:200]
+    return render(request, "notifications/broadcast_detail.html", {
+        "broadcast": broadcast, "counts": counts, "failed": failed,
+    })
