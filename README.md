@@ -29,7 +29,7 @@ Three surfaces, one database:
 - **Telegram Bot** — employees: link account, view own current/past salary.
 - **DRF API** — same role-scoped data programmatically.
 
-Bot runs as its **own process** (long polling) — see `deploy/telegram-bot.service`.
+Bot runs as its **own process** (long polling) — see `deploy/salary-bot.service`.
 
 ## 2. Data model (ERD)
 
