@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Oyliklar{% endblock %}
+{% block page_title %}Oyliklar{% endblock %}
+{% block nav_salaries %}active{% endblock %}
+{% block content %}
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-3"><input name="q" value="{{ search }}" class="form-control" placeholder="Ism / kod / telefon"></div>
+  {% if units.count > 1 %}<div class="col-md-3"><select name="unit" class="form-select"><option value="">Barcha filiallar</option>{% for u in units %}<option value="{{ u.id }}" {% if selected_unit == u.id|stringformat:'s' %}selected{% endif %}>{{ u.name }}</option>{% endfor %}</select></div>{% endif %}
+  <div class="col-md-2"><input name="year" value="{{ year }}" class="form-control" placeholder="Yil"></div>
+  <div class="col-md-2"><input name="month" value="{{ month }}" class="form-control" placeholder="Oy"></div>
+  <div class="col-md-2 d-grid"><button class="btn btn-primary">Filtr</button></div>
+</form>
+<a href="{% url 'salaries:export_csv' %}?q={{ search }}&unit={{ selected_unit }}&year={{ year }}&month={{ month }}" class="btn btn-sm btn-outline-success mb-2"><i class="bi bi-filetype-csv"></i> CSV Export</a>
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle">
+  <thead class="table-light"><tr><th>Xodim</th><th>Filial</th><th>Davr</th><th>Hisoblangan</th><th>Avans</th><th>Ushlanma</th><th>Qo'lga</th></tr></thead>
+  <tbody>{% for s in page %}<tr><td>{{ s.employee.full_name }}</td><td>{{ s.organization_unit.name }}</td><td>{{ s.period_label }}</td><td>{{ s.gross_salary }}</td><td>{{ s.advance }}</td><td>{{ s.deductions }}</td><td><strong>{{ s.net_salary }}</strong></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Ma'lumot yo'q</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

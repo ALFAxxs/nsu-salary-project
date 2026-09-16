@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Telegram foydalanuvchilari{% endblock %}
+{% block page_title %}Telegram foydalanuvchilari{% endblock %}
+{% block nav_telegram_users %}active{% endblock %}
+{% block content %}
+<p class="text-muted">
+  Botga <code>/start</code> bosib, telefon raqamini tasdiqlagan barcha odamlar — xodim sifatida
+  tizimga kiritilgan-kiritilmaganidan qat'iy nazar. "Bog'langan" ustuni ular allaqachon biror
+  xodim yozuviga mos kelayotganini ko'rsatadi.
+</p>
+<div class="stat-grid mb-3">
+  <div class="stat-card green"><div class="label">Xodimga bog'langan</div><div class="value">{{ matched_count }}</div></div>
+  <div class="stat-card yellow"><div class="label">Hali bog'lanmagan</div><div class="value">{{ unmatched_count }}</div></div>
+</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle">
+  <thead class="table-light"><tr><th>Telefon</th><th>Telegram username</th><th>Birinchi marta ko'rilgan</th><th>Holat</th><th></th></tr></thead>
+  <tbody>
+  {% for row in page %}
+    <tr>
+      <td>{{ row.contact.normalized_phone }}</td>
+      <td>{% if row.contact.telegram_username %}@{{ row.contact.telegram_username }}{% else %}—{% endif %}</td>
+      <td>{{ row.contact.first_seen_at|date:"Y-m-d H:i" }}</td>
+      <td>
+        {% if row.employee %}
+        <a href="{% url 'employees:detail' row.employee.pk %}"><span class="badge badge-green">Bog'langan: {{ row.employee.full_name }}</span></a>
+        {% else %}
+        <span class="badge badge-yellow">Kutilmoqda — xodim sifatida hali kiritilmagan</span>
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="{% url 'employees:telegram_user_delete' row.contact.pk %}" onsubmit="return confirm('Bu yozuvni o\'chirasizmi?')">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-danger">O'chirish</button>
+        </form>
+      </td>
+    </tr>
+  {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Hali hech kim botga ulanmagan</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

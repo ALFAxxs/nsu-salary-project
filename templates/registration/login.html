@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Kirish — Salary System{% endblock %}
+{% block auth_content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1><i class="bi bi-cash-stack text-primary"></i> Salary System</h1>
+    <p class="sub">HR / Buxgalteriya paneli</p>
+    {% if form.errors %}
+      <div class="alert alert-danger py-2">Login yoki parol noto'g'ri.</div>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label">Login</label>
+        {{ form.username }}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Parol</label>
+        {{ form.password }}
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Kirish</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

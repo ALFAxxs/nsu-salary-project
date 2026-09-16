@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Xabarlar{% endblock %}
+{% block page_title %}Oylik xabarlari{% endblock %}
+{% block nav_notifications %}active{% endblock %}
+{% block content %}
+<div class="card mb-3"><div class="card-body">
+  <p class="mb-1"><strong>Filial:</strong> {{ imp.organization_unit.name }} — <strong>Davr:</strong> {{ imp.period_label }}</p>
+  <p class="mb-0"><span class="badge bg-secondary">Holat: {{ imp.get_status_display }}</span></p>
+</div></div>
+
+<div class="stat-grid">
+  <div class="stat-card blue"><div class="label">Tayyorlangan</div><div class="value">{{ counts.prepared }}</div></div>
+  <div class="stat-card yellow"><div class="label">Kutilmoqda</div><div class="value">{{ counts.pending }}</div></div>
+  <div class="stat-card green"><div class="label">Yuborilgan</div><div class="value">{{ counts.sent }}</div></div>
+  <div class="stat-card red"><div class="label">Xato / Blok</div><div class="value">{{ counts.failed }}</div></div>
+  <div class="stat-card"><div class="label">Ulanmagan</div><div class="value">{{ counts.not_connected }}</div></div>
+  <div class="stat-card red"><div class="label">JSHSHIR mos kelmadi</div><div class="value">{{ counts.mismatched }}</div></div>
+</div>
+
+<form method="post" action="{% url 'notifications:send' imp.pk %}" onsubmit="return confirm('{{ counts.pending }} ta xodimga oylik xabari yuboriladi. Davom etasizmi?')">{% csrf_token %}
+  <button class="btn btn-success btn-lg"><i class="bi bi-send"></i> Send salary notifications</button>
+  <a href="{% url 'notifications:list' %}" class="btn btn-outline-primary">Barcha xabarlar</a>
+</form>
+
+{% if unconnected %}
+<div class="card mt-4">
+  <div class="card-header bg-white fw-semibold text-warning">Botga ulanmagan xodimlar ({{ counts.not_connected }})</div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>F.I.Sh</th><th>Telefon</th></tr></thead>
+    <tbody>{% for m in unconnected %}<tr><td>{{ m.employee.full_name }}</td><td>{{ m.employee.normalized_phone }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+{% if mismatched %}
+<div class="card mt-4">
+  <div class="card-header bg-white fw-semibold text-danger">JSHSHIR mos kelmagan xodimlar ({{ counts.mismatched }})</div>
+  <p class="px-3 pt-2 mb-0 text-muted small">
+    Bu xodimlar botga ulangan, lekin oylik faylidagi JSHSHIR ularning HR ro'yxatidagi
+    JSHSHIR'iga mos kelmadi (yoki xodimda umuman JSHSHIR kiritilmagan) — xato bo'lishi
+    mumkinligi uchun xabar yuborilmadi. Xodim ma'lumotlarini tekshirib to'g'rilang, so'ng
+    "Resend" bilan qayta yuboring.
+  </p>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>F.I.Sh</th><th>Telefon</th><th>Fayldagi JSHSHIR</th><th>HR ro'yxatidagi JSHSHIR</th></tr></thead>
+    <tbody>{% for m in mismatched %}<tr>
+      <td><a href="{% url 'employees:detail' m.employee.pk %}">{{ m.employee.full_name }}</a></td>
+      <td>{{ m.employee.normalized_phone }}</td>
+      <td>{{ m.salary.payroll_jshshir|default:"—" }}</td>
+      <td>{{ m.employee.jshshir|default:"—" }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

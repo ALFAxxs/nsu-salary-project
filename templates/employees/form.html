@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Xodim{% endblock %}
+{% block page_title %}{% if is_new %}Yangi xodim{% else %}Xodimni tahrirlash{% endif %}{% endblock %}
+{% block nav_employees %}active{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px"><div class="card-body">
+<form method="post">{% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  {% for field in form %}<div class="mb-3">
+    <label class="form-label">{{ field.label }}</label>
+    {{ field }}
+    {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>{% endfor %}
+  <button class="btn btn-primary">Saqlash</button>
+  <a href="{% if employee %}{% url 'employees:detail' employee.pk %}{% else %}{% url 'employees:list' %}{% endif %}" class="btn btn-light">Bekor</a>
+</form>
+</div></div>
+{% endblock %}

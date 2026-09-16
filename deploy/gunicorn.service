@@ -1,0 +1,19 @@
+# /etc/systemd/system/salary-web.service
+[Unit]
+Description=Salary System - Gunicorn
+After=network.target postgresql.service redis.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/salary_system
+Environment="DJANGO_SETTINGS_MODULE=config.settings.prod"
+ExecStart=/opt/salary_system/.venv/bin/gunicorn config.wsgi:application \
+    --workers 4 --bind unix:/run/salary.sock --timeout 120 \
+    --access-logfile /opt/salary_system/logs/gunicorn-access.log \
+    --error-logfile /opt/salary_system/logs/gunicorn-error.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

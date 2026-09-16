@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Hisobotlar{% endblock %}
+{% block page_title %}Hisobotlar{% endblock %}
+{% block nav_reports %}active{% endblock %}
+{% block content %}
+<form method="get" class="d-flex gap-2 mb-3">
+  <input name="year" value="{{ year }}" class="form-control" style="max-width:120px">
+  <input name="month" value="{{ month }}" class="form-control" style="max-width:120px">
+  <button class="btn btn-outline-primary">Ko'rsatish</button>
+</form>
+<div class="stat-grid">
+  <div class="stat-card"><div class="label">Xodimlar</div><div class="value">{{ summary.total_employees }}</div></div>
+  <div class="stat-card blue"><div class="label">Umumiy payroll</div><div class="value" style="font-size:1.3rem">{{ summary.total_payroll }}</div></div>
+  <div class="stat-card green"><div class="label">Yuborilgan</div><div class="value">{{ summary.messages_sent }}</div></div>
+  <div class="stat-card red"><div class="label">Xato</div><div class="value">{{ summary.messages_failed }}</div></div>
+</div>
+{% if is_global and branches %}
+<div class="card"><div class="card-header bg-white fw-semibold">Filiallar bo'yicha</div>
+<div class="table-responsive"><table class="table"><thead class="table-light"><tr><th>Filial</th><th>Xodim</th><th>Telegram</th><th>Import</th><th>Yuborilgan</th><th>Xato</th></tr></thead>
+<tbody>{% for r in branches %}<tr><td>{{ r.unit.name }}</td><td>{{ r.employees }}</td><td>{{ r.connected }}</td><td>{{ r.imported }}</td><td>{{ r.sent }}</td><td>{{ r.failed }}</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endif %}
+{% endblock %}

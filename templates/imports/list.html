@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Excel Import{% endblock %}
+{% block page_title %}Excel Import{% endblock %}
+{% block nav_imports %}active{% endblock %}
+{% block content %}
+<div class="d-flex gap-2 mb-3">
+  <a href="{% url 'imports:upload' %}" class="btn btn-primary"><i class="bi bi-upload"></i> Yangi import</a>
+  <a href="{% url 'imports:template' %}" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Template yuklab olish</a>
+</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle">
+  <thead class="table-light"><tr><th>#</th><th>Filial</th><th>Davr</th><th>Fayl</th><th>Qatorlar</th><th>Holat</th><th></th></tr></thead>
+  <tbody>{% for imp in imports %}
+    <tr>
+      <td>{{ imp.pk }}</td><td>{{ imp.organization_unit.name }}</td><td>{{ imp.period_label }}</td>
+      <td class="small">{{ imp.file_name }}</td>
+      <td>{{ imp.valid_rows }}/{{ imp.total_rows }} {% if imp.error_rows %}<span class="badge badge-red">{{ imp.error_rows }} xato</span>{% endif %}</td>
+      <td><span class="badge bg-secondary">{{ imp.get_status_display }}</span></td>
+      <td><a href="{% url 'imports:preview' imp.pk %}" class="btn btn-sm btn-outline-primary">Ko'rish</a></td>
+    </tr>
+  {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Import yo'q</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

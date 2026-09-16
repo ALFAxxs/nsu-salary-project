@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+.env
+/media/
+/staticfiles/
+/logs/*.log
+*.egg-info/
+.venv/
+
+# Real HR/payroll data and one-off scratch dumps made from it while
+# developing the importer — never belongs in version control (JSHSHIR,
+# passport, phone, salary figures for real employees).
+/*.xlsx
+~$*.xlsx
+full_dump.txt
+template_dump*.txt
+template_indexed.txt
+
+# Internal business/cost documentation — kept local, not on GitHub.
+/*.docx

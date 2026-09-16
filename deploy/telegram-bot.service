@@ -1,0 +1,16 @@
+# /etc/systemd/system/salary-bot.service
+[Unit]
+Description=Salary System - Telegram Bot
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/salary_system
+Environment="DJANGO_SETTINGS_MODULE=config.settings.prod"
+ExecStart=/opt/salary_system/.venv/bin/python manage.py run_bot
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

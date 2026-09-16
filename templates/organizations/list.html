@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Filiallar{% endblock %}
+{% block page_title %}Filiallar{% endblock %}
+{% block nav_orgs %}active{% endblock %}
+{% block content %}
+<a href="{% url 'organizations:create' %}" class="btn btn-primary mb-3"><i class="bi bi-plus"></i> Yangi filial</a>
+<div class="card"><div class="table-responsive"><table class="table table-hover">
+  <thead class="table-light"><tr><th>Nomi</th><th>Kod</th><th>Turi</th><th>Holat</th><th>Xodimlar</th><th class="text-end">Amallar</th></tr></thead>
+  <tbody>{% for u in units %}<tr>
+    <td>{% if u.is_head_office %}<i class="bi bi-building text-primary"></i> {% endif %}{{ u.name }}</td>
+    <td>{{ u.code }}</td><td>{{ u.get_type_display }}</td>
+    <td>{% if u.is_active %}<span class="badge badge-green">Faol</span>{% else %}<span class="badge bg-secondary">Nofaol</span>{% endif %}</td>
+    <td>{{ u.employees.count }}</td>
+    <td class="text-end">
+      <div class="d-inline-flex gap-1">
+        <a href="{% url 'organizations:edit' u.pk %}" class="btn btn-sm btn-outline-primary">Tahrir</a>
+        {% if not u.is_head_office %}
+        <form method="post" action="{% url 'organizations:toggle_active' u.pk %}" class="d-inline">{% csrf_token %}
+          {% if u.is_active %}
+          <button class="btn btn-sm btn-outline-warning" onclick="return confirm('\'{{ u.name }}\' nofaollashtirilsinmi?')">Nofaollashtirish</button>
+          {% else %}
+          <button class="btn btn-sm btn-outline-success">Faollashtirish</button>
+          {% endif %}
+        </form>
+        <form method="post" action="{% url 'organizations:delete' u.pk %}" class="d-inline" onsubmit="return confirm('\'{{ u.name }}\' butunlay o\'chirilsinmi?\n\nBirga o\'chadi: {{ u.employees.count }} ta xodim (barcha oylik/xabar tarixi bilan), {{ u.imports.count }} ta import, {{ u.users.count }} ta admin login.\n\nBU AMALNI QAYTARIB BO\'LMAYDI.')">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-danger">O'chirish</button>
+        </form>
+        {% endif %}
+      </div>
+    </td>
+  </tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

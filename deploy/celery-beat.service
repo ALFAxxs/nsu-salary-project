@@ -1,0 +1,16 @@
+# /etc/systemd/system/salary-beat.service
+[Unit]
+Description=Salary System - Celery Beat
+After=network.target redis.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/salary_system
+Environment="DJANGO_SETTINGS_MODULE=config.settings.prod"
+ExecStart=/opt/salary_system/.venv/bin/celery -A config beat --loglevel=info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Import Preview{% endblock %}
+{% block page_title %}Import Preview{% endblock %}
+{% block nav_imports %}active{% endblock %}
+{% block content %}
+
+{% if fatal_error %}
+  <div class="alert alert-danger"><i class="bi bi-x-octagon"></i> {{ fatal_error }}</div>
+  <a href="{% url 'imports:upload' %}" class="btn btn-primary">Qayta yuklash</a>
+{% else %}
+
+<div class="card mb-3"><div class="card-body">
+  <div class="row">
+    <div class="col-md-6">
+      <p class="mb-1"><strong>Filial:</strong> {{ imp.organization_unit.name }}</p>
+      <p class="mb-1"><strong>Davr:</strong> {{ imp.period_label }}</p>
+      <p class="mb-0"><strong>Fayl:</strong> {{ imp.file_name }}</p>
+    </div>
+    <div class="col-md-6">
+      <div class="d-flex gap-2 flex-wrap">
+        <span class="badge badge-green fs-6">{{ imp.valid_rows }} valid</span>
+        <span class="badge badge-yellow fs-6">{{ imp.telegram_unlinked_count }} Telegram ulanmagan</span>
+        <span class="badge badge-red fs-6">{{ imp.error_rows }} xato</span>
+        <span class="badge bg-secondary fs-6">Jami: {{ imp.total_rows }}</span>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+{% if error_rows %}
+<div class="card mb-3">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold text-danger">Xatoliklar ({{ imp.error_rows }})</span>
+    <a href="{% url 'imports:error_report' imp.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-download"></i> Error Report</a>
+  </div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>Qator</th><th>Kod</th><th>Telefon</th><th>Xato</th></tr></thead>
+    <tbody>{% for r in error_rows %}
+      <tr class="table-danger"><td>{{ r.row_number }}</td><td>{{ r.normalized.employee_code }}</td><td>{{ r.normalized.phone }}</td><td>{{ r.errors|join:"; " }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-header bg-white fw-semibold">Valid qatorlar (dastlabki 50)</div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>Qator</th><th>Kod</th><th>Telefon</th><th>Qo'lga</th><th>Telegram</th></tr></thead>
+    <tbody>{% for r in valid_preview %}
+      <tr><td>{{ r.row_number }}</td><td>{{ r.normalized.employee_code }}</td><td>{{ r.normalized.phone }}</td><td>{{ r.normalized.net_salary }}</td>
+        <td>{% if r.telegram_linked %}<span class="badge badge-green">✓</span>{% else %}<span class="badge badge-yellow">✗</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div class="d-flex gap-2">
+  {% if imp.status == 'VALID' or imp.status == 'HAS_ERRORS' %}
+  <form method="post" action="{% url 'imports:confirm' imp.pk %}" onsubmit="return confirm('{{ imp.valid_rows }} ta qator import qilinadi. Davom etasizmi?')">{% csrf_token %}
+    <button class="btn btn-success"><i class="bi bi-check-circle"></i> Confirm Import ({{ imp.valid_rows }})</button>
+  </form>
+  <form method="post" action="{% url 'imports:cancel' imp.pk %}">{% csrf_token %}
+    <button class="btn btn-outline-danger">Bekor qilish</button>
+  </form>
+  {% else %}
+    <span class="badge bg-info fs-6">Holat: {{ imp.get_status_display }}</span>
+    <a href="{% url 'notifications:import_detail' imp.pk %}" class="btn btn-primary">Xabarlarga o'tish</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

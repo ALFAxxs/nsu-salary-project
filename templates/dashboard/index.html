@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<form method="get" class="d-flex gap-2 mb-3">
+  <select name="month" class="form-select" style="max-width:160px">
+    {% for m in "123456789101112"|make_list %}{% endfor %}
+    {% for mm in months_range %}{% endfor %}
+    {% for i in "x"|ljust:12 %}
+      <option value="{{ forloop.counter }}" {% if forloop.counter == month %}selected{% endif %}>{{ forloop.counter }}-oy</option>
+    {% endfor %}
+  </select>
+  <input type="number" name="year" value="{{ year }}" class="form-control" style="max-width:120px">
+  <button class="btn btn-outline-primary">Ko'rsatish</button>
+</form>
+ 
+<div class="stat-grid">
+  <div class="stat-card"><div class="label">Umumiy xodimlar</div><div class="value">{{ summary.total_employees }}</div></div>
+  <div class="stat-card green"><div class="label">Telegram Ulanganlar</div><div class="value">{{ summary.telegram_connected }}</div></div>
+  <div class="stat-card yellow"><div class="label">Ulanmaganlar</div><div class="value">{{ summary.telegram_unconnected }}</div></div>
+  <div class="stat-card blue"><div class="label">Imports (davr)</div><div class="value">{{ summary.current_imports }}</div></div>
+  <div class="stat-card green"><div class="label">Xabar jo'natilganlar</div><div class="value">{{ summary.messages_sent }}</div></div>
+  <div class="stat-card red"><div class="label">Xatoliklar</div><div class="value">{{ summary.messages_failed }}</div></div>
+</div>
+
+{% if is_global and branches %}
+<div class="card">
+  <div class="card-header bg-white fw-semibold">Filiallar bo'yicha</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr><th>Filial</th><th>Xodimlar</th><th>Telegram</th><th>Import</th><th>Yuborilgan</th><th>Xato</th></tr>
+      </thead>
+      <tbody>
+        {% for row in branches %}
+        <tr>
+          <td>
+            {% if row.unit.is_head_office %}<i class="bi bi-building text-primary"></i>{% endif %}
+            {{ row.unit.name }} <span class="text-muted small">{{ row.unit.code }}</span>
+          </td>
+          <td>{{ row.employees }}</td>
+          <td><span class="badge badge-green">{{ row.connected }}</span></td>
+          <td>{{ row.imported }}</td>
+          <td>{{ row.sent }}</td>
+          <td>{% if row.failed %}<span class="badge badge-red">{{ row.failed }}</span>{% else %}0{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+# /etc/systemd/system/salary-worker.service
+[Unit]
+Description=Salary System - Celery Worker
+After=network.target redis.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/salary_system
+Environment="DJANGO_SETTINGS_MODULE=config.settings.prod"
+ExecStart=/opt/salary_system/.venv/bin/celery -A config worker \
+    --loglevel=info --concurrency=4
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

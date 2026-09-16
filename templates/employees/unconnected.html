@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Ulanmagan xodimlar{% endblock %}
+{% block page_title %}Botga ulanmagan xodimlar{% endblock %}
+{% block nav_employees %}active{% endblock %}
+{% block content %}
+<div class="alert alert-warning">Quyidagi xodimlar botga /start bosmagan — ularga xabar yuborib bo'lmaydi.</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover">
+  <thead class="table-light"><tr><th>F.I.Sh</th><th>Telefon</th><th>Filial</th></tr></thead>
+  <tbody>{% for e in page %}<tr><td>{{ e.full_name }}</td><td>{{ e.normalized_phone }}</td><td>{{ e.organization_unit.name }}</td></tr>{% empty %}<tr><td colspan="3" class="text-center text-muted py-3">Barcha xodimlar ulangan</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

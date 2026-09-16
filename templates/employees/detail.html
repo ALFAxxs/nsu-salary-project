@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.full_name }}{% endblock %}
+{% block page_title %}Xodim ma'lumotlari{% endblock %}
+{% block nav_employees %}active{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card"><div class="card-body">
+      <h5>{{ employee.full_name }}</h5>
+      <table class="table table-sm mt-3">
+        <tr><th>Kod</th><td>{{ employee.employee_code }}</td></tr>
+        <tr><th>Telefon</th><td>{{ employee.normalized_phone }}</td></tr>
+        <tr><th>JSHSHIR</th><td>{{ employee.jshshir|default:"—" }}</td></tr>
+        <tr><th>Pasport</th><td>{{ employee.passport_number|default:"—" }}</td></tr>
+        <tr><th>Tug'ilgan sana</th><td>{{ employee.birth_date|date:"d.m.Y"|default:"—" }}</td></tr>
+        <tr><th>Jinsi</th><td>{{ employee.get_gender_display|default:"—" }}</td></tr>
+        <tr><th>Bo'lim</th><td>{{ employee.department|default:"—" }}</td></tr>
+        <tr><th>Lavozim</th><td>{{ employee.position|default:"—" }}</td></tr>
+        <tr><th>Shartnoma turi</th><td>{{ employee.contract_type|default:"—" }}</td></tr>
+        <tr><th>Joriy filial</th><td>{{ employee.organization_unit.name }}</td></tr>
+        <tr><th>Telegram</th><td>
+          {% if employee.is_telegram_linked %}<span class="badge badge-green">Ulangan</span> {{ employee.telegram_username }}{% else %}<span class="badge badge-yellow">Ulanmagan</span>{% endif %}
+        </td></tr>
+        <tr><th>Holat</th><td>{% if employee.is_active %}<span class="badge badge-green">Faol</span>{% else %}<span class="badge bg-secondary">Nofaol</span>{% endif %}</td></tr>
+      </table>
+      <div class="d-flex flex-wrap gap-1">
+        {% if employee.is_telegram_linked %}
+        <form method="post" action="{% url 'employees:unlink' employee.pk %}" onsubmit="return confirm('Telegram akkauntni uzasizmi?')">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-danger">Telegram akkauntni uzish</button>
+        </form>
+        {% endif %}
+        {% if nav_can_manage_employees %}
+        <a href="{% url 'employees:edit' employee.pk %}" class="btn btn-sm btn-outline-primary">Tahrirlash</a>
+        <form method="post" action="{% url 'employees:toggle_active' employee.pk %}">{% csrf_token %}
+          {% if employee.is_active %}
+          <button class="btn btn-sm btn-outline-warning" onclick="return confirm('\'{{ employee.full_name }}\' nofaollashtirilsinmi?')">Nofaollashtirish</button>
+          {% else %}
+          <button class="btn btn-sm btn-outline-success">Faollashtirish</button>
+          {% endif %}
+        </form>
+        <form method="post" action="{% url 'employees:delete' employee.pk %}" onsubmit="return confirm('\'{{ employee.full_name }}\' butunlay o\'chirilsinmi?\n\nBirga o\'chadi: {{ employee.salaries.count }} ta oylik yozuvi.\n\nBU AMALNI QAYTARIB BO\'LMAYDI.')">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-danger">O'chirish</button>
+        </form>
+        {% endif %}
+      </div>
+    </div></div>
+  </div>
+  <div class="col-md-7">
+    <div class="card"><div class="card-header bg-white fw-semibold">Oyliklar tarixi</div>
+    <div class="table-responsive"><table class="table table-sm">
+      <thead class="table-light"><tr><th>Davr</th><th>Filial</th><th>Hisoblangan</th><th>Avans</th><th>Ushlanma</th><th>Qo'lga</th></tr></thead>
+      <tbody>
+      {% for s in salary_history %}
+        <tr><td>{{ s.period_label }}</td><td>{{ s.organization_unit.name }}</td><td>{{ s.gross_salary }}</td><td>{{ s.advance }}</td><td>{{ s.deductions }}</td><td>{{ s.net_salary }}</td></tr>
+      {% empty %}<tr><td colspan="6" class="text-center text-muted py-3">Ma'lumot yo'q</td></tr>{% endfor %}
+      </tbody>
+    </table></div></div>
+  </div>
+</div>
+{% endblock %}

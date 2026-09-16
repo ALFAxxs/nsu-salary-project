@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Xabarlar{% endblock %}
+{% block page_title %}Telegram xabarlari{% endblock %}
+{% block nav_notifications %}active{% endblock %}
+{% block content %}
+<form method="get" class="mb-3">
+  <select name="status" class="form-select" style="max-width:260px" onchange="this.form.submit()">
+    <option value="">Barcha holatlar</option>
+    {% for val,label in statuses %}<option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+</form>
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle">
+  <thead class="table-light"><tr><th>Xodim</th><th>Filial</th><th>Davr</th><th>Holat</th><th>Urinishlar</th><th></th></tr></thead>
+  <tbody>{% for m in page %}
+    <tr>
+      <td>{{ m.employee.full_name }}</td><td>{{ m.salary.organization_unit.name }}</td><td>{{ m.salary.period_label }}</td>
+      <td>
+        {% if m.status == 'SENT' %}<span class="badge badge-green">Yuborilgan</span>
+        {% elif m.status == 'FAILED' or m.status == 'BLOCKED' %}<span class="badge badge-red">{{ m.get_status_display }}</span>
+        {% elif m.status == 'TELEGRAM_NOT_CONNECTED' %}<span class="badge bg-secondary">Ulanmagan</span>
+        {% elif m.status == 'JSHSHIR_MISMATCH' %}<span class="badge badge-red">JSHSHIR mos kelmadi</span>
+        {% elif m.status == 'SENDING' %}<span class="badge bg-info">Yuborilmoqda...</span>
+        {% else %}<span class="badge badge-yellow">{{ m.get_status_display }}</span>{% endif %}
+      </td>
+      <td>{{ m.attempts }}</td>
+      <td>{% if m.status != 'SENT' and m.status != 'TELEGRAM_NOT_CONNECTED' %}
+        <form method="post" action="{% url 'notifications:resend' m.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Resend</button></form>
+      {% endif %}</td>
+    </tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Xabar yo'q</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}
