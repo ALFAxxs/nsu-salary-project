@@ -65,6 +65,15 @@ def import_detail(request, pk: int):
             status=MessageStatus.TELEGRAM_NOT_CONNECTED).count(),
         "mismatched": msgs.filter(status=MessageStatus.JSHSHIR_MISMATCH).count(),
     }
+    pending = msgs.filter(
+        status=MessageStatus.PENDING
+    ).select_related("employee")[:200]
+    sent = msgs.filter(
+        status=MessageStatus.SENT
+    ).select_related("employee").order_by("-sent_at")[:200]
+    failed = msgs.filter(
+        status__in=[MessageStatus.FAILED, MessageStatus.BLOCKED]
+    ).select_related("employee")[:200]
     unconnected = msgs.filter(
         status=MessageStatus.TELEGRAM_NOT_CONNECTED
     ).select_related("employee")[:200]
@@ -72,8 +81,9 @@ def import_detail(request, pk: int):
         status=MessageStatus.JSHSHIR_MISMATCH
     ).select_related("employee")[:200]
     return render(request, "notifications/import_detail.html", {
-        "imp": salary_import, "counts": counts, "unconnected": unconnected,
-        "mismatched": mismatched,
+        "imp": salary_import, "counts": counts,
+        "pending": pending, "sent": sent, "failed": failed,
+        "unconnected": unconnected, "mismatched": mismatched,
     })
 
 
