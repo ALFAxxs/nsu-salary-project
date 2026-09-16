@@ -5,7 +5,8 @@ Start with:  python -m apps.telegram_bot.bot   (after DJANGO_SETTINGS_MODULE is 
 or via the management command:  python manage.py run_bot
 
 Handles (spec §8, §20-22, §42, §43):
-  /start   -> ask for contact -> link account
+  /start   -> ask for contact -> ask for JSHSHIR -> link account (both must
+             match the SAME on-file Employee, or nothing is linked)
   menu     -> Joriy oylik / Oyliklar tarixi / Profil / Telefonni yangilash / Yordam
 
 An employee only ever sees their own data (keyed by telegram_id).
@@ -24,6 +25,9 @@ django.setup()
 
 from aiogram import Bot, Dispatcher, F  # noqa: E402
 from aiogram.filters import Command  # noqa: E402
+from aiogram.fsm.context import FSMContext  # noqa: E402
+from aiogram.fsm.state import State, StatesGroup  # noqa: E402
+from aiogram.fsm.storage.memory import MemoryStorage  # noqa: E402
 from aiogram.types import (  # noqa: E402
     CallbackQuery,
     InlineKeyboardButton,
@@ -35,6 +39,7 @@ from aiogram.types import (  # noqa: E402
 )
 from django.conf import settings  # noqa: E402
 
+from apps.common.jshshir import is_valid_jshshir, normalize_jshshir  # noqa: E402
 from apps.telegram_bot import data  # noqa: E402
 
 logger = logging.getLogger("apps.telegram_bot")
@@ -46,6 +51,11 @@ def _fmt(value) -> str:
     except (TypeError, ValueError):
         return str(value)
     return f"{n:,}".replace(",", " ")
+
+
+class LinkStates(StatesGroup):
+    """Two-step /start verification: contact-share, then typed JSHSHIR."""
+    waiting_for_jshshir = State()
 
 
 # --- Keyboards ------------------------------------------------------------- #
@@ -69,7 +79,7 @@ MONTH_NAMES = [
     "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ]
 
-dp = Dispatcher()
+dp = Dispatcher(storage=MemoryStorage())
 
 
 def _years_keyboard(years: list[int]) -> InlineKeyboardMarkup:
@@ -91,7 +101,8 @@ def _months_keyboard(year: int, months: list[int]) -> InlineKeyboardMarkup:
 
 # --- /start ---------------------------------------------------------------- #
 @dp.message(Command("start"))
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
+    await state.clear()  # /start always resets any half-finished verification
     emp = await data.get_employee(message.from_user.id)
     if emp:
         await message.answer(
@@ -106,36 +117,71 @@ async def cmd_start(message: Message):
     )
 
 
-# --- Contact linking ------------------------------------------------------- #
+# --- Contact + JSHSHIR verification (two-factor, spec §8) ------------------ #
 @dp.message(F.contact)
-async def on_contact(message: Message):
+async def on_contact(message: Message, state: FSMContext):
     contact = message.contact
     # Only accept the user's OWN contact (spec §8 security).
     if contact.user_id != message.from_user.id:
         await message.answer("Iltimos, o'zingizning telefon raqamingizni yuboring.")
         return
 
+    # Phone alone never links anymore — hold it and ask for JSHSHIR next;
+    # on_jshshir below does the actual verification+linking.
+    await state.update_data(
+        phone=contact.phone_number, username=message.from_user.username or "",
+    )
+    await state.set_state(LinkStates.waiting_for_jshshir)
+    await message.answer(
+        "Rahmat! Endi tasdiqlash uchun JSHSHIR (PINFL) raqamingizni kiriting "
+        "— 14 ta raqam.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+
+@dp.message(LinkStates.waiting_for_jshshir)
+async def on_jshshir(message: Message, state: FSMContext):
+    raw = (message.text or "").strip()
+    jshshir = normalize_jshshir(raw)
+    if not is_valid_jshshir(jshshir):
+        await message.answer(
+            "JSHSHIR aynan 14 ta raqamdan iborat bo'lishi kerak. Qaytadan kiriting."
+        )
+        return  # stay in the same state — let them retry without re-sharing contact
+
+    stored = await state.get_data()
+    phone = stored.get("phone", "")
+    username = stored.get("username", "")
+    await state.clear()
+
     result, name = await data.link_contact(
-        phone=contact.phone_number,
-        telegram_id=message.from_user.id,
-        username=message.from_user.username or "",
+        phone=phone, jshshir=jshshir,
+        telegram_id=message.from_user.id, username=username,
     )
 
     if result in ("LINKED", "ALREADY_SAME"):
         await message.answer(
-            f"Rahmat, {name}! Akkauntingiz muvaffaqiyatli ulandi.",
+            f"Rahmat, {name}! Akkauntingiz muvaffaqiyatli tasdiqlandi va ulandi.",
             reply_markup=MENU_KB,
         )
         return
 
-    # Every other outcome means THIS attempt didn't (re)link anything — but
-    # if this Telegram account is already linked to its own employee (e.g.
-    # they tried "Telefonni yangilash" with a number that didn't work out),
-    # they still have full access and must not lose their menu over it.
+    # Every other outcome means nothing was (re)linked — per policy, a
+    # phone/JSHSHIR mismatch never partially links; the person simply gets
+    # nothing until HR sorts it out. If this Telegram account is already
+    # linked to its OWN employee (e.g. "Telefonni yangilash" attempt that
+    # didn't pan out), keep their existing menu instead of stripping it.
     still_linked = await data.get_employee(message.from_user.id) is not None
     kb = MENU_KB if still_linked else ReplyKeyboardRemove()
 
-    if result == "CONFLICT_EMPLOYEE":
+    if result == "JSHSHIR_MISMATCH":
+        await message.answer(
+            "Telefon raqami va JSHSHIR mos kelmadi (yoki xodim ma'lumotlarida "
+            "JSHSHIR hali kiritilmagan). Hech qanday ma'lumot ulanmadi — "
+            "HR bo'limiga murojaat qiling.",
+            reply_markup=kb,
+        )
+    elif result == "CONFLICT_EMPLOYEE":
         await message.answer(
             "Ushbu xodim profili boshqa Telegram akkauntiga ulangan. "
             "HR bilan bog'laning.",
@@ -153,11 +199,11 @@ async def on_contact(message: Message):
             "Aniqlashtirish uchun HR bo'limiga murojaat qiling.",
             reply_markup=kb,
         )
-    else:  # NOT_FOUND — phone remembered; will auto-link once payroll Excel names it.
+    else:  # NOT_FOUND — phone/JSHSHIR remembered; will auto-link once HR registers a match.
         await message.answer(
-            "Raqamingiz qabul qilindi. Hozircha sizga tegishli oylik ma'lumoti "
-            "tizimga kiritilmagan — buxgalteriya oylik hisobotini yuklagach, "
-            "avtomatik ulanasiz va xabar olasiz.",
+            "Ma'lumotlaringiz qabul qilindi. Hozircha sizga tegishli xodim yozuvi "
+            "tizimga kiritilmagan — HR ro'yxatga olgach, avtomatik ulanasiz va "
+            "xabar olasiz.",
             reply_markup=kb,
         )
 

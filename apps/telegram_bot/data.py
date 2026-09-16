@@ -18,10 +18,11 @@ from apps.salaries.models import Salary
 
 
 @sync_to_async
-def link_contact(*, phone: str, telegram_id: int, username: str = "") -> tuple[str, str]:
-    """Attempt to link a Telegram contact. Returns (result_code, employee_name)."""
+def link_contact(*, phone: str, jshshir: str, telegram_id: int, username: str = "") -> tuple[str, str]:
+    """Attempt to link a Telegram contact (phone + JSHSHIR, both required).
+    Returns (result_code, employee_name)."""
     outcome = EmployeeRegistrationService.link_telegram(
-        raw_phone=phone, telegram_id=telegram_id, telegram_username=username,
+        raw_phone=phone, raw_jshshir=jshshir, telegram_id=telegram_id, telegram_username=username,
     )
     name = outcome.employee.full_name if outcome.employee else ""
     return outcome.result.value, name

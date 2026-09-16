@@ -77,39 +77,93 @@ class PhoneNormalizationTests(TestCase):
 
 
 class TelegramLinkingTests(TestCase):
+    """Two-factor /start verification: phone (contact-share) AND JSHSHIR
+    (typed) must both match the SAME on-file Employee before telegram_id is
+    ever linked. Phone alone is never enough."""
+
     def setUp(self):
         _, self.b1, _ = make_org()
         self.emp = Employee.objects.create(
             employee_code="E1", full_name="Ali", phone="998901234567",
-            organization_unit=self.b1,
+            jshshir="30101234567890", organization_unit=self.b1,
         )
 
     def test_link_success(self):
         outcome = EmployeeRegistrationService.link_telegram(
-            raw_phone="+998 90 123 45 67", telegram_id=111, telegram_username="ali")
+            raw_phone="+998 90 123 45 67", raw_jshshir="30101234567890",
+            telegram_id=111, telegram_username="ali")
         self.assertEqual(outcome.result, LinkResult.LINKED)
         self.emp.refresh_from_db()
         self.assertEqual(self.emp.telegram_id, 111)
 
-    def test_conflict_when_already_linked(self):
-        EmployeeRegistrationService.link_telegram(raw_phone="998901234567", telegram_id=111)
+    def test_wrong_jshshir_blocks_link(self):
         outcome = EmployeeRegistrationService.link_telegram(
-            raw_phone="998901234567", telegram_id=222)
+            raw_phone="998901234567", raw_jshshir="99999999999999", telegram_id=111)
+        self.assertEqual(outcome.result, LinkResult.JSHSHIR_MISMATCH)
+        self.emp.refresh_from_db()
+        self.assertIsNone(self.emp.telegram_id)  # nothing linked
+
+    def test_employee_with_no_jshshir_on_file_can_never_link(self):
+        self.emp.jshshir = None
+        self.emp.save(update_fields=["jshshir"])
+        outcome = EmployeeRegistrationService.link_telegram(
+            raw_phone="998901234567", raw_jshshir="30101234567890", telegram_id=111)
+        self.assertEqual(outcome.result, LinkResult.JSHSHIR_MISMATCH)
+        self.emp.refresh_from_db()
+        self.assertIsNone(self.emp.telegram_id)
+
+    def test_invalid_jshshir_format_rejected(self):
+        outcome = EmployeeRegistrationService.link_telegram(
+            raw_phone="998901234567", raw_jshshir="123", telegram_id=111)
+        self.assertEqual(outcome.result, LinkResult.JSHSHIR_INVALID)
+
+    def test_conflict_when_already_linked(self):
+        EmployeeRegistrationService.link_telegram(
+            raw_phone="998901234567", raw_jshshir="30101234567890", telegram_id=111)
+        outcome = EmployeeRegistrationService.link_telegram(
+            raw_phone="998901234567", raw_jshshir="30101234567890", telegram_id=222)
         self.assertEqual(outcome.result, LinkResult.CONFLICT_EMPLOYEE)
 
     def test_not_found(self):
         outcome = EmployeeRegistrationService.link_telegram(
-            raw_phone="998900000000", telegram_id=333)
+            raw_phone="998900000000", raw_jshshir="30101234567890", telegram_id=333)
         self.assertEqual(outcome.result, LinkResult.NOT_FOUND)
 
-    def test_not_found_still_remembers_contact_for_future_excel_import(self):
+    def test_not_found_still_remembers_contact_with_jshshir(self):
         # No employee exists for this phone yet — but the person still
-        # pressed /start, so a later payroll Excel with this phone must be
-        # able to auto-link them without asking them to press /start again.
+        # pressed /start and typed a JSHSHIR, so a later HR registration
+        # with this phone+JSHSHIR must be able to auto-link them without
+        # asking them to go through the bot a second time.
         EmployeeRegistrationService.link_telegram(
-            raw_phone="998900000000", telegram_id=444, telegram_username="futureguy")
+            raw_phone="998900000000", raw_jshshir="99988877766655",
+            telegram_id=444, telegram_username="futureguy")
         contact = TelegramContact.objects.get(normalized_phone="998900000000")
         self.assertEqual(contact.telegram_id, 444)
+        self.assertEqual(contact.jshshir, "99988877766655")
+
+    def test_auto_link_from_contact_requires_matching_jshshir(self):
+        # This phone+JSHSHIR pair pressed /start before any Employee record
+        # for them existed.
+        EmployeeRegistrationService.link_telegram(
+            raw_phone="998900009999", raw_jshshir="11122233344455",
+            telegram_id=555, telegram_username="newhire")
+
+        # HR registers them with the WRONG JSHSHIR on file (typo) — must not
+        # auto-link on phone alone.
+        wrong = Employee.objects.create(
+            full_name="Typo'd JSHSHIR", phone="998900009999",
+            jshshir="00000000000000", organization_unit=self.b1)
+        self.assertFalse(EmployeeRegistrationService.try_auto_link_from_contact(wrong))
+        wrong.refresh_from_db()
+        self.assertIsNone(wrong.telegram_id)
+
+        # HR fixes the JSHSHIR to match what the person actually typed —
+        # now it auto-links.
+        wrong.jshshir = "11122233344455"
+        wrong.save(update_fields=["jshshir"])
+        self.assertTrue(EmployeeRegistrationService.try_auto_link_from_contact(wrong))
+        wrong.refresh_from_db()
+        self.assertEqual(wrong.telegram_id, 555)
 
 
 class BranchIsolationTests(TestCase):

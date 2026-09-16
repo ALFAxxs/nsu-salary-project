@@ -36,10 +36,11 @@ class Employee(models.Model):
     )
 
     # HR registry fields (spec: employee onboarding record, distinct from
-    # payroll). jshshir is a second potential identity key for a future
-    # phase (not wired into any matching logic yet — see project memory) so
-    # it is kept globally unique like phone, but optional: most employees
-    # are entered without it until HR backfills the full registry.
+    # payroll). jshshir is a second identity key alongside phone — used by
+    # payroll-import matching (apps.imports.validators) and by the bot's
+    # two-factor /start verification (apps.employees.services.link_telegram)
+    # — kept globally unique like phone, but optional: most employees are
+    # entered without it until HR backfills the full registry.
     jshshir = models.CharField(
         _("JSHSHIR"), max_length=14, unique=True, null=True, blank=True
     )
@@ -105,16 +106,17 @@ class Employee(models.Model):
 class TelegramContact(models.Model):
     """
     Anyone who has ever pressed /start on the bot and shared their contact —
-    independent of whether they are a known Employee yet.
+    independent of whether they are a known (HR-registered) Employee yet.
 
-    No employee is pre-registered in this system: HR/accounting simply
-    uploads a fresh payroll Excel each month, and a phone number becomes an
-    Employee only when it first appears in one. But a person may press
-    /start on the bot before (or after) that happens. This table is the
-    bridge: at Excel-import time, a brand-new phone is matched against this
-    table so the resulting Employee is auto-linked immediately instead of
-    requiring the person to press /start a second time. A phone with no
-    matching Excel row never gets anything sent to it — this table alone
+    The bot's /start flow requires BOTH phone (via contact-share) AND
+    JSHSHIR (typed, 14 digits) before it will actually link telegram_id to
+    an Employee — see EmployeeRegistrationService.link_telegram. This table
+    is the bridge for the case where the phone/JSHSHIR were entered before
+    a matching Employee existed yet: when HR later creates that Employee,
+    try_auto_link_from_contact() re-checks the SAME two-factor match against
+    what's stored here and links immediately if it still holds, without
+    requiring the person to go through the bot a second time. A row with no
+    matching Employee never gets anything sent to it — this table alone
     never triggers a message.
     """
     normalized_phone = models.CharField(
@@ -122,6 +124,10 @@ class TelegramContact(models.Model):
     )
     telegram_id = models.BigIntegerField(_("telegram id"), unique=True)
     telegram_username = models.CharField(_("telegram username"), max_length=255, blank=True)
+    # Entered by the person during /start. Blank only for contacts recorded
+    # before this requirement existed — such rows can never auto-link
+    # (see try_auto_link_from_contact), since there's nothing to verify.
+    jshshir = models.CharField(_("JSHSHIR"), max_length=14, blank=True, default="")
     first_seen_at = models.DateTimeField(_("first seen at"), auto_now_add=True)
     updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
