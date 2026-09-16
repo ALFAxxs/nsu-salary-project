@@ -34,9 +34,9 @@
     <a href="{% url 'imports:error_report' imp.pk %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-download"></i> Error Report</a>
   </div>
   <div class="table-responsive"><table class="table table-sm mb-0">
-    <thead class="table-light"><tr><th>Qator</th><th>Kod</th><th>Telefon</th><th>Xato</th></tr></thead>
+    <thead class="table-light"><tr><th>Qator</th><th>F.I.Sh</th><th>PINFL</th><th>Xato</th></tr></thead>
     <tbody>{% for r in error_rows %}
-      <tr class="table-danger"><td>{{ r.row_number }}</td><td>{{ r.normalized.employee_code }}</td><td>{{ r.normalized.phone }}</td><td>{{ r.errors|join:"; " }}</td></tr>
+      <tr class="table-danger"><td>{{ r.row_number }}</td><td>{{ r.normalized.full_name|default:"—" }}</td><td>{{ r.normalized.jshshir|default:"—" }}</td><td>{{ r.errors|join:"; " }}</td></tr>
     {% endfor %}</tbody>
   </table></div>
 </div>

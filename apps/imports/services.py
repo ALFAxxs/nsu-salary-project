@@ -217,15 +217,15 @@ class SalaryImportService:
         wb = Workbook()
         ws = wb.active
         ws.title = "Errors"
-        ws.append(["Row", "Employee code", "Phone", "Error"])
+        ws.append(["Row", "F.I.Sh", "PINFL", "Error"])
         for row in payload.get("rows", []):
             if not row.get("errors"):
                 continue
             norm = row.get("normalized", {})
             ws.append([
                 row.get("row_number"),
-                safe_cell(norm.get("employee_code", "")),
-                safe_cell(norm.get("phone", "")),
+                safe_cell(norm.get("full_name", "")),
+                safe_cell(norm.get("jshshir", "")),
                 "; ".join(row.get("errors", [])),
             ])
         buf = io.BytesIO()
