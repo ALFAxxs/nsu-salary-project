@@ -82,13 +82,14 @@ def list_salary_years(telegram_id: int) -> list[int]:
 
 @sync_to_async
 def list_salary_months(telegram_id: int, year: int) -> list[int]:
-    """Distinct months (1-12) this employee has salary history for in `year`."""
+    """Distinct months (1-12) this employee has salary history for in
+    `year`, ascending (Yanvar first) — the natural calendar order."""
     emp = Employee.objects.filter(telegram_id=telegram_id, is_active=True).first()
     if emp is None:
         return []
     return list(
         Salary.objects.filter(employee=emp, is_current=True, period_year=year)
-        .order_by("-period_month")
+        .order_by("period_month")
         .values_list("period_month", flat=True)
         .distinct()
     )

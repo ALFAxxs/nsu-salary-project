@@ -5,8 +5,12 @@ Start with:  python -m apps.telegram_bot.bot   (after DJANGO_SETTINGS_MODULE is 
 or via the management command:  python manage.py run_bot
 
 Handles (spec §8, §20-22, §42, §43):
-  /start   -> ask for contact -> ask for JSHSHIR -> link account (both must
-             match the SAME on-file Employee, or nothing is linked)
+  /start, /restart -> ask for contact -> ask for JSHSHIR -> link account
+             (both must match the SAME on-file Employee, or nothing is
+             linked); /restart is just /start again, for anyone who gets
+             stuck mid-flow. Both, plus /salary, /history, /profile, /help,
+             are registered with Telegram's own "/" command menu (see
+             BOT_COMMANDS, set via bot.set_my_commands in main()).
   menu     -> Joriy oylik / Oyliklar tarixi / Profil / Yordam
 
 An employee only ever sees their own data (keyed by telegram_id).
@@ -29,6 +33,7 @@ from aiogram.fsm.context import FSMContext  # noqa: E402
 from aiogram.fsm.state import State, StatesGroup  # noqa: E402
 from aiogram.fsm.storage.memory import MemoryStorage  # noqa: E402
 from aiogram.types import (  # noqa: E402
+    BotCommand,
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -90,7 +95,7 @@ def _years_keyboard(years: list[int]) -> InlineKeyboardMarkup:
 
 def _months_keyboard(year: int, months: list[int]) -> InlineKeyboardMarkup:
     buttons = [
-        InlineKeyboardButton(text=MONTH_NAMES[m], callback_data=f"hist:month:{year}:{m}")
+        InlineKeyboardButton(text=f"{m}-{MONTH_NAMES[m]}", callback_data=f"hist:month:{year}:{m}")
         for m in months
     ]
     rows = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
@@ -98,8 +103,9 @@ def _months_keyboard(year: int, months: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-# --- /start ---------------------------------------------------------------- #
+# --- /start ------------------------------------------------------------ #
 @dp.message(Command("start"))
+@dp.message(Command("restart"))
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()  # /start always resets any half-finished verification
     emp = await data.get_employee(message.from_user.id)
@@ -364,11 +370,22 @@ def _one_salary_text(s: dict) -> str:
     return text
 
 
+BOT_COMMANDS = [
+    BotCommand(command="start", description="Botni ishga tushirish / ro'yxatdan o'tish"),
+    BotCommand(command="restart", description="Botni qayta boshlash (holatni tozalash)"),
+    BotCommand(command="salary", description="💰 Joriy oylik"),
+    BotCommand(command="history", description="📊 Oyliklar tarixi"),
+    BotCommand(command="profile", description="👤 Profilim"),
+    BotCommand(command="help", description="❓ Yordam"),
+]
+
+
 async def main() -> None:
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
     bot = Bot(token=token)
+    await bot.set_my_commands(BOT_COMMANDS)
     logger.info("Bot starting (long polling)...")
     await dp.start_polling(bot)
 
