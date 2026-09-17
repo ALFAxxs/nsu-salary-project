@@ -7,7 +7,7 @@ or via the management command:  python manage.py run_bot
 Handles (spec §8, §20-22, §42, §43):
   /start   -> ask for contact -> ask for JSHSHIR -> link account (both must
              match the SAME on-file Employee, or nothing is linked)
-  menu     -> Joriy oylik / Oyliklar tarixi / Profil / Telefonni yangilash / Yordam
+  menu     -> Joriy oylik / Oyliklar tarixi / Profil / Yordam
 
 An employee only ever sees their own data (keyed by telegram_id).
 """
@@ -68,8 +68,7 @@ CONTACT_KB = ReplyKeyboardMarkup(
 MENU_KB = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💰 Joriy oylik"), KeyboardButton(text="📊 Oyliklar tarixi")],
-        [KeyboardButton(text="👤 Profilim"), KeyboardButton(text="🔄 Telefonni yangilash")],
-        [KeyboardButton(text="❓ Yordam")],
+        [KeyboardButton(text="👤 Profilim"), KeyboardButton(text="❓ Yordam")],
     ],
     resize_keyboard=True,
 )
@@ -169,8 +168,10 @@ async def on_jshshir(message: Message, state: FSMContext):
     # Every other outcome means nothing was (re)linked — per policy, a
     # phone/JSHSHIR mismatch never partially links; the person simply gets
     # nothing until HR sorts it out. If this Telegram account is already
-    # linked to its OWN employee (e.g. "Telefonni yangilash" attempt that
-    # didn't pan out), keep their existing menu instead of stripping it.
+    # linked to its OWN employee, keep their existing menu instead of
+    # stripping it (defensive — there's no menu button that re-triggers
+    # contact-share for an already-linked user anymore, but /start always
+    # can).
     still_linked = await data.get_employee(message.from_user.id) is not None
     kb = MENU_KB if still_linked else ReplyKeyboardRemove()
 
@@ -315,15 +316,6 @@ async def profile(message: Message):
     )
 
 
-@dp.message(F.text == "🔄 Telefonni yangilash")
-async def update_phone(message: Message):
-    await message.answer(
-        "Telefon raqamini yangilash uchun yangi raqamni tasdiqlang.\n"
-        "Eslatma: raqam boshqa profilga tegishli bo'lsa, HR bilan bog'laning.",
-        reply_markup=CONTACT_KB,
-    )
-
-
 @dp.message(F.text == "❓ Yordam")
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
@@ -331,8 +323,7 @@ async def help_cmd(message: Message):
         "❓ Yordam\n\n"
         "💰 Joriy oylik — eng so'nggi oylik\n"
         "📊 Oyliklar tarixi — oldingi oyliklar\n"
-        "👤 Profilim — shaxsiy ma'lumot\n"
-        "🔄 Telefonni yangilash — raqamni qayta ulash\n\n"
+        "👤 Profilim — shaxsiy ma'lumot\n\n"
         "Muammo bo'lsa HR bo'limiga murojaat qiling.",
         reply_markup=MENU_KB,
     )
