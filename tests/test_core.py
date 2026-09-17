@@ -700,6 +700,50 @@ class ImportValidationTests(TestCase):
         saved = Salary.objects.get(employee=self.emp, is_current=True)
         self.assertEqual(saved.net_salary, Decimal("-1963199.60"))
 
+    def test_xls_whole_number_cells_lose_the_float_dot(self):
+        """Real bug: xlrd (legacy .xls) has no integer cell type — every
+        number comes back as a Python float, so a 14-digit JSHSHIR round-
+        tripped as 52108027410019.0. str()'d and digit-stripped, that
+        trailing ".0" survived as a spurious extra "0" -> a 15-digit value
+        matching no one, no matter how many times the source file's JSHSHIR
+        was "corrected". _iter_xls_rows must convert a whole-number float
+        back to int before it ever reaches str()."""
+        from unittest.mock import MagicMock, patch
+
+        import xlrd
+
+        self.emp.jshshir = "52108027410019"
+        self.emp.save(update_fields=["jshshir"])
+
+        header = ["employee_code", "jshshir", "full_name", "net_salary"]
+        data_row = ["", 52108027410019.0, "Ali", 5900000.0]  # both whole-number floats
+
+        def cell_value(r, c):
+            return (header if r == 0 else data_row)[c]
+
+        def cell_type(r, c):
+            v = (header if r == 0 else data_row)[c]
+            return xlrd.XL_CELL_NUMBER if isinstance(v, float) else xlrd.XL_CELL_TEXT
+
+        mock_sheet = MagicMock(nrows=2, ncols=4)
+        mock_sheet.cell_value.side_effect = cell_value
+        mock_sheet.cell_type.side_effect = cell_type
+        mock_book = MagicMock(datemode=0)
+        mock_book.sheet_by_index.return_value = mock_sheet
+
+        import io
+        fake_file = io.BytesIO(b"stand-in bytes -- xlrd.open_workbook is mocked below")
+        fake_file.name = "avf.xls"
+
+        with patch("xlrd.open_workbook", return_value=mock_book):
+            report = ExcelValidationService(organization_unit=self.b1).validate(fake_file)
+
+        self.assertEqual(report.error_rows, 0)
+        row = report.rows[0]
+        self.assertEqual(row.normalized["jshshir"], "52108027410019")  # not "...0190"
+        self.assertEqual(row.employee_id, self.emp.id)
+        self.assertEqual(row.normalized["net_salary"], Decimal("5900000.0"))  # money untouched
+
     def test_file_with_no_phone_column_matches_by_jshshir(self):
         # Real payroll exports often carry only JSHSHIR/ПИНФЛ, no phone at
         # all — phone lives in the HR registry, not in payroll. Such a file

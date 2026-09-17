@@ -13,8 +13,10 @@ __pycache__/
 
 # Real HR/payroll data and one-off scratch dumps made from it while
 # developing the importer — never belongs in version control (JSHSHIR,
-# passport, phone, salary figures for real employees).
+# passport, phone, salary figures for real employees). Both modern and
+# legacy Excel formats are supported now, so both are excluded.
 /*.xlsx
+/*.xls
 ~$*.xlsx
 full_dump.txt
 template_dump*.txt

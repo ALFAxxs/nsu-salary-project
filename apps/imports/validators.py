@@ -343,6 +343,18 @@ class ExcelValidationService:
                     value = xlrd.xldate_as_datetime(value, book.datemode)
                 elif cell_type == xlrd.XL_CELL_EMPTY:
                     value = None
+                elif cell_type == xlrd.XL_CELL_NUMBER and value == int(value):
+                    # The legacy .xls format has no separate integer type —
+                    # xlrd always returns numeric cells as float, so a whole
+                    # ID number like a 14-digit JSHSHIR or a phone number
+                    # comes back as e.g. 52108027410019.0. str()'d as-is,
+                    # that trailing ".0" survives digit-stripping as a
+                    # spurious extra "0" (52108027410019.0 -> "521080274
+                    # 100190" — 15 digits, matches no one). Whole numbers
+                    # are common enough (any ID/code column, not just money)
+                    # that this is corrected once here for every column,
+                    # rather than in each field's own normalizer.
+                    value = int(value)
                 row.append(_Cell(value))
             yield row
 
