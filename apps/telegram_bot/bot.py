@@ -83,6 +83,91 @@ MONTH_NAMES = [
     "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ]
 
+# --- Personal-data processing consent (spec: shaxsga doir ma'lumotlarni
+# qayta ishlashga rozilik) — shown once, before /start ever asks for phone
+# or JSHSHIR. Wording is exact as approved; do not paraphrase. ---------- #
+CONSENT_INTRO_TEXT = (
+    "Assalomu alaykum!\n"
+    "Botdan foydalanishni boshlashdan oldin shaxsga doir ma’lumotlarni qayta ishlash "
+    "shartlari bilan tanishib chiqing.\n"
+    "Bot quyidagi ma’lumotlarni qayta ishlashi mumkin:\n"
+    "Telefon raqami;\n"
+    "PINFL/JSHSHIR;\n"
+    "Oylik daromad va boshqa moliyaviy ma’lumotlar;\n"
+    "Botdan foydalanish uchun zarur texnik ma’lumotlar.\n"
+    "Ma’lumotlar foydalanuvchini identifikatsiya qilish, bot xizmatlarini taqdim etish "
+    "va foydalanuvchi so‘rovlariga muvofiq moliyaviy hisob-kitoblarni amalga oshirish "
+    "maqsadida qayta ishlanadi.\n"
+    "To‘liq rozilik matni bilan tanishib chiqing. Rozilik berish ixtiyoriy bo‘lib, "
+    "ma’lumotlardan foydalanish ko‘rsatilgan maqsadlar bilan cheklanadi."
+)
+
+CONSENT_FULL_TEXT = (
+    "SHAXSGA DOIR MA’LUMOTLARNI QAYTA ISHLASHGA ROZILIK\n\n"
+    "Men, Telegram botdan foydalanuvchi jismoniy shaxs sifatida, mazkur rozilik matni "
+    "bilan tanishib chiqib, uning mazmunini tushungan holda, o‘z xohish-irodam bilan va "
+    "ixtiyoriy ravishda o‘zimga tegishli shaxsga doir ma’lumotlarni Telegram bot orqali "
+    "qayta ishlashga rozilik beraman.\n\n"
+    "1. Qayta ishlanadigan shaxsga doir ma’lumotlar\n"
+    "Men Telegram botdan foydalanish jarayonida quyidagi shaxsga doir ma’lumotlarim "
+    "qayta ishlanishiga rozilik beraman:\n"
+    "- telefon raqamim;\n"
+    "- jismoniy shaxsning shaxsiy identifikatsiya raqami (PINFL/JSHSHIR);\n"
+    "- oylik daromadim hamda boshqa moliyaviy ma’lumotlarim;\n"
+    "- Telegram akkauntimga oid botdan foydalanish uchun zarur bo‘lgan texnik "
+    "ma’lumotlar;\n"
+    "- bot xizmatlaridan foydalanish jarayonida o‘zim tomonidan taqdim etilgan, ushbu "
+    "xizmatlarni ko‘rsatish uchun zarur bo‘lgan boshqa ma’lumotlar.\n\n"
+    "2. Shaxsga doir ma’lumotlardan foydalanish maqsadlari\n"
+    "Men o‘zimga tegishli yuqorida ko‘rsatilgan shaxsga doir ma’lumotlardan quyidagi "
+    "maqsadlarda foydalanilishiga rozilik beraman:\n"
+    "1. Meni ro‘yxatdan o‘tkazish va shaxsni identifikatsiya qilish;\n"
+    "2. Telegram bot orqali xizmatlarni taqdim etish;\n"
+    "3. Mening so‘rovimga asosan daromad va boshqa moliyaviy ma’lumotlarimni qayta "
+    "ishlash, hisob-kitoblarni amalga oshirish hamda tegishli axborotlarni "
+    "shakllantirish;\n"
+    "4. Telegram botning ishlashini ta’minlash, texnik nosozliklarni aniqlash va "
+    "bartaraf etish;\n"
+    "5. Axborot xavfsizligini ta’minlash va ruxsatsiz foydalanish holatlarining oldini "
+    "olish;\n"
+    "6. O‘zbekiston Respublikasi qonunchiligida nazarda tutilgan boshqa qonuniy "
+    "maqsadlarda.\n\n"
+    "3. Mening huquq va majburiyatlarim\n"
+    "Men Telegram botga taqdim etayotgan shaxsga doir ma’lumotlarimning to‘g‘riligi, "
+    "haqqoniyligi va dolzarbligi uchun javob beraman.\n"
+    "Men o‘z telefon raqamim, Telegram akkauntim, tasdiqlash kodlari, parollar va "
+    "boshqa maxfiy ma’lumotlarimni begona shaxslarga bermaslik hamda ulardan xavfsiz "
+    "foydalanish choralarini ko‘rishim lozimligini tushunaman.\n"
+    "Men o‘zimga tegishli shaxsga doir ma’lumotlarni qayta ishlashga berilgan "
+    "roziligimni qonunchilikda belgilangan tartibda qaytarib olish, o‘zim haqimda "
+    "qayta ishlanayotgan shaxsga doir ma’lumotlar to‘g‘risida axborot olish, noto‘g‘ri "
+    "yoki eskirgan ma’lumotlarni tuzatishni talab qilish hamda qonunchilikda nazarda "
+    "tutilgan boshqa huquqlardan foydalanish huquqiga ega ekanligimni bilaman.\n\n"
+    "4. Shaxsga doir ma’lumotlarni himoya qilish\n"
+    "Men shaxsga doir ma’lumotlarim qonunchilikda belgilangan talablar asosida himoya "
+    "qilinishini tushunaman.\n"
+    "Shuningdek, o‘z aybim yoki ehtiyotsizligim natijasida shaxsga doir "
+    "ma’lumotlarimni uchinchi shaxslarga oshkor qilishim, Telegram akkauntimga, "
+    "tasdiqlash kodlarimga yoki boshqa maxfiy ma’lumotlarimga begona shaxslarning "
+    "kirishiga yo‘l qo‘yishim natijasida yuzaga kelishi mumkin bo‘lgan oqibatlar uchun "
+    "qonunchilikda belgilangan tartibda javobgar bo‘lishim mumkinligini tushunaman.\n"
+    "Mazkur rozilik bot egasining shaxsga doir ma’lumotlarni qonunchilik talablariga "
+    "muvofiq himoya qilish, ularning maxfiyligini ta’minlash va ulardan qonuniy "
+    "foydalanish bo‘yicha majburiyatlarini bekor qilmasligini tushunaman.\n\n"
+    "5. Rozilik berish\n"
+    "Men ushbu rozilik matnini to‘liq o‘qib chiqdim va uning mazmunini tushundim.\n"
+    "Men Telegram botdan foydalanish jarayonida o‘zimga tegishli telefon raqami, "
+    "PINFL/JSHSHIR, oylik daromad va boshqa moliyaviy ma’lumotlarimni yuqorida "
+    "ko‘rsatilgan maqsadlarda qayta ishlashga ixtiyoriy ravishda rozilik beraman."
+)
+
+CONSENT_INTRO_KB = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="📄 To'liq tanishish", callback_data="consent:full")]
+])
+CONSENT_AGREE_KB = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="✅ Roziman", callback_data="consent:agree")]
+])
+
 dp = Dispatcher(storage=MemoryStorage())
 
 
@@ -115,17 +200,45 @@ async def cmd_start(message: Message, state: FSMContext):
             reply_markup=MENU_KB,
         )
         return
+    if not await data.has_consent(message.from_user.id):
+        # Gate everything else behind the consent text — asked once, not
+        # re-shown on every /start once agreed (see consent_agree below).
+        await message.answer(CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
+        return
     await message.answer(
-        "Assalomu alaykum!\n\n"
         "Oylik ish haqingiz haqida ma'lumot olish uchun telefon raqamingizni tasdiqlang.",
         reply_markup=CONTACT_KB,
     )
+
+
+@dp.callback_query(F.data == "consent:full")
+async def consent_show_full(callback: CallbackQuery):
+    # A separate message, not an edit — the short intro stays visible above it.
+    await callback.message.answer(CONSENT_FULL_TEXT, reply_markup=CONSENT_AGREE_KB)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "consent:agree")
+async def consent_agree(callback: CallbackQuery):
+    await data.record_consent(callback.from_user.id)
+    await callback.message.edit_reply_markup(reply_markup=None)  # "Roziman" no longer clickable
+    await callback.message.answer(
+        "Rahmat! Endi telefon raqamingizni tasdiqlang.",
+        reply_markup=CONTACT_KB,
+    )
+    await callback.answer("Rozilik qabul qilindi.")
 
 
 # --- Contact + JSHSHIR verification (two-factor, spec §8) ------------------ #
 @dp.message(F.contact)
 async def on_contact(message: Message, state: FSMContext):
     contact = message.contact
+    # Defensive: CONTACT_KB is only ever shown after consent, but guard the
+    # underlying data-collection step itself too, in case an old keyboard
+    # is still sitting in someone's chat from before this gate existed.
+    if not await data.has_consent(message.from_user.id):
+        await message.answer(CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
+        return
     # Only accept the user's OWN contact (spec §8 security).
     if contact.user_id != message.from_user.id:
         await message.answer("Iltimos, o'zingizning telefon raqamingizni yuboring.")

@@ -12,9 +12,21 @@ from __future__ import annotations
 
 from asgiref.sync import sync_to_async
 
-from apps.employees.models import Employee
+from apps.employees.models import BotConsent, Employee
 from apps.employees.services import EmployeeRegistrationService
 from apps.salaries.models import Salary
+
+
+@sync_to_async
+def has_consent(telegram_id: int) -> bool:
+    """Has this Telegram user already agreed to the personal-data
+    processing consent text? Checked before /start ever asks for phone."""
+    return BotConsent.objects.filter(telegram_id=telegram_id).exists()
+
+
+@sync_to_async
+def record_consent(telegram_id: int) -> None:
+    BotConsent.objects.get_or_create(telegram_id=telegram_id)
 
 
 @sync_to_async

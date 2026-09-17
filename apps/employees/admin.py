@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from apps.accounts.permissions import scope_employees
-from apps.employees.models import Employee, TelegramContact
+from apps.employees.models import BotConsent, Employee, TelegramContact
 
 
 @admin.register(Employee)
@@ -25,6 +25,29 @@ class TelegramContactAdmin(admin.ModelAdmin):
     """
     list_display = ("normalized_phone", "telegram_id", "telegram_username", "first_seen_at")
     search_fields = ("normalized_phone", "telegram_username")
+
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_active and request.user.is_superuser
+
+
+@admin.register(BotConsent)
+class BotConsentAdmin(admin.ModelAdmin):
+    """Compliance record — who agreed to the personal-data consent text and
+    when. Read-only, superuser-only, same treatment as TelegramContact."""
+    list_display = ("telegram_id", "agreed_at")
+    search_fields = ("telegram_id",)
 
     def has_module_permission(self, request):
         return request.user.is_active and request.user.is_superuser

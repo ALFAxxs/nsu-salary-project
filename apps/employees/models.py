@@ -137,3 +137,22 @@ class TelegramContact(models.Model):
 
     def __str__(self) -> str:
         return f"TelegramContact({self.normalized_phone} -> {self.telegram_id})"
+
+
+class BotConsent(models.Model):
+    """
+    Records that a Telegram user explicitly read and agreed to the personal
+    data processing consent text — required before the bot asks for phone
+    or JSHSHIR at all (spec: shaxsga doir ma'lumotlarni qayta ishlashga
+    rozilik). One row per telegram_id, first agreement only; consent is not
+    re-asked on every /start once given.
+    """
+    telegram_id = models.BigIntegerField(_("telegram id"), unique=True)
+    agreed_at = models.DateTimeField(_("agreed at"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("bot consent")
+        verbose_name_plural = _("bot consents")
+
+    def __str__(self) -> str:
+        return f"BotConsent({self.telegram_id} @ {self.agreed_at:%Y-%m-%d})"
