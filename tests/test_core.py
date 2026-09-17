@@ -659,7 +659,7 @@ class ImportValidationTests(TestCase):
             ["B1-E1", "998901110001", "Ali", 8000000, 2000000, 100000, 5900000],  # valid, existing
             ["", "998900000000", "Nobody", 1000000, 0, 0, 1000000],  # unregistered phone -> error
             ["", "998900000001", "", 1000000, 0, 0, 1000000],  # unregistered phone, no name -> error
-            ["B1-E1", "998901110001", "Ali", 8000000, 2000000, 100000, -5],  # negative + dup
+            ["B1-E1", "998901110001", "Ali", 8000000, 2000000, 100000, -5],  # dup (same employee+code as row 1)
         ])
         report = ExcelValidationService(organization_unit=self.b1).validate(f)
         self.assertIsNone(report.fatal_error)
@@ -672,6 +672,33 @@ class ImportValidationTests(TestCase):
         self.assertFalse(unregistered_row.is_valid)
         self.assertIsNone(unregistered_row.employee_id)
         self.assertTrue(any("ro'yxatda topilmadi" in e for e in unregistered_row.errors))
+
+    def test_negative_net_salary_is_accepted_as_is(self):
+        # A real payroll balance can legitimately go negative (e.g. the
+        # employee owes money back after an overpayment) — this must not be
+        # rejected, and the negative value must survive unchanged all the
+        # way through to the committed Salary row.
+        f = self._excel([
+            ["B1-E1", "998901110001", "Ali", 8000000, 2000000, 100000, -1963199.6],
+        ])
+        report = ExcelValidationService(organization_unit=self.b1).validate(f)
+        self.assertEqual(report.error_rows, 0)
+        row = report.rows[0]
+        self.assertTrue(row.is_valid)
+        self.assertEqual(row.normalized["net_salary"], Decimal("-1963199.6"))
+
+        imp = SalaryImport.objects.create(
+            organization_unit=self.b1, period_year=2026, period_month=8,
+            file_name="x.xlsx",
+            uploaded_by=User.objects.create_user("u10", password="x", role=Role.SUPER_ADMIN))
+        imp.validation_payload = report.to_payload()
+        imp.valid_rows, imp.error_rows = report.valid_rows, report.error_rows
+        imp.status = ImportStatus.VALID
+        imp.save()
+        SalaryImportService.confirm_and_commit(imp, user=imp.uploaded_by)
+
+        saved = Salary.objects.get(employee=self.emp, is_current=True)
+        self.assertEqual(saved.net_salary, Decimal("-1963199.60"))
 
     def test_file_with_no_phone_column_matches_by_jshshir(self):
         # Real payroll exports often carry only JSHSHIR/ПИНФЛ, no phone at

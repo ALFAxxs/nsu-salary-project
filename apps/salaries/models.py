@@ -134,16 +134,10 @@ class Salary(models.Model):
                 condition=models.Q(period_month__gte=1) & models.Q(period_month__lte=12),
                 name="salary_month_range",
             ),
-            # No negative core amounts (spec §13).
-            models.CheckConstraint(
-                condition=(
-                    models.Q(gross_salary__gte=0)
-                    & models.Q(advance__gte=0)
-                    & models.Q(deductions__gte=0)
-                    & models.Q(net_salary__gte=0)
-                ),
-                name="salary_non_negative",
-            ),
+            # Negative core amounts ARE allowed — a real payroll balance can
+            # legitimately go negative (e.g. an employee who owes money back
+            # after an overpayment), so it's shown to them as-is rather than
+            # rejected.
         ]
 
     def __str__(self) -> str:

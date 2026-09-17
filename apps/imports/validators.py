@@ -29,8 +29,10 @@ Key rules:
   * Only the 7 canonical fields are ever read — everything else in a wide
     export (national ID, department, individual bonus/deduction line
     items, ...) is simply never looked at, let alone sent to the employee.
-  * Salary values numeric and non-negative, no duplicate employee within the
-    file (existing or newly-created).
+  * Salary values must be numeric — negative is accepted as-is (a real
+    payroll balance can legitimately go negative, e.g. an employee who
+    owes money back). No duplicate employee within the file (existing or
+    newly-created).
   * Formula cells are rejected (openpyxl data_only=False lets us detect
     them) — .xlsx only; see _iter_xls_rows for why legacy .xls can't do
     this check.
@@ -410,7 +412,9 @@ class ExcelValidationService:
             rr.employee_id = employee.id
             rr.telegram_linked = employee.is_telegram_linked
 
-        # Money fields.
+        # Money fields. Negative values are accepted as-is (not an error) —
+        # a real payroll export can legitimately show a negative balance,
+        # e.g. an employee who owes money back after an overpayment.
         for f in MONEY_FIELDS:
             if f not in raw:
                 rr.normalized[f] = Decimal("0")
@@ -420,9 +424,6 @@ class ExcelValidationService:
                 if f == "net_salary" or raw.get(f) not in (None, ""):
                     rr.errors.append(f"'{f}' qiymati son emas")
                 rr.normalized[f] = Decimal("0")
-            elif value < 0:
-                rr.errors.append(f"'{f}' manfiy bo'lishi mumkin emas")
-                rr.normalized[f] = value
             else:
                 rr.normalized[f] = value
 
