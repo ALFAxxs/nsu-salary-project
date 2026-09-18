@@ -114,7 +114,7 @@ def send_salary_message(self, message_id: int) -> None:
     try:
         resp = requests.post(
             BOT_API.format(token=token),
-            json={"chat_id": message.telegram_id, "text": text},
+            json={"chat_id": message.telegram_id, "text": text, "protect_content": True},
             timeout=15,
         )
     except requests.RequestException as exc:
@@ -289,7 +289,7 @@ def send_broadcast_message(self, recipient_id: int) -> None:
     try:
         resp = requests.post(
             BOT_API.format(token=token),
-            json={"chat_id": recipient.telegram_id, "text": text},
+            json={"chat_id": recipient.telegram_id, "text": text, "protect_content": True},
             timeout=15,
         )
     except requests.RequestException as exc:

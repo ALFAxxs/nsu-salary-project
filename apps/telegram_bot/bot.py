@@ -28,6 +28,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.prod")
 django.setup()
 
 from aiogram import Bot, Dispatcher, F  # noqa: E402
+from aiogram.client.default import DefaultBotProperties  # noqa: E402
 from aiogram.filters import Command  # noqa: E402
 from aiogram.fsm.context import FSMContext  # noqa: E402
 from aiogram.fsm.state import State, StatesGroup  # noqa: E402
@@ -497,7 +498,10 @@ async def main() -> None:
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
-    bot = Bot(token=token)
+    # protect_content: every message this bot sends (salary figures, JSHSHIR
+    # prompts, etc.) is forward/save-protected in Telegram clients by default,
+    # applied bot-wide so individual handlers don't need to repeat it.
+    bot = Bot(token=token, default=DefaultBotProperties(protect_content=True))
     await bot.set_my_commands(BOT_COMMANDS)
     logger.info("Bot starting (long polling)...")
     await dp.start_polling(bot)
