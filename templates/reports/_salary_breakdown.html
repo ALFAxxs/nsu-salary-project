@@ -1,0 +1,12 @@
+{% load report_extras %}
+<ul class="list-group list-group-flush">
+  <li class="list-group-item d-flex justify-content-between"><span>Xodimlar</span><strong>{{ r.employees }}</strong></li>
+  <li class="list-group-item d-flex justify-content-between"><span>Yalpi oylik</span><strong>{{ r.gross|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between"><span>Avans</span><strong>{{ r.advance|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between"><span>Ushlab qolingan (jami)</span><strong>{{ r.deductions|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— NDFL</span><span>{{ r.income_tax|money }} so'm</span></li>
+  <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— INPS</span><span>{{ r.pension_contribution|money }} so'm</span></li>
+  <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— Profsoyuz badali</span><span>{{ r.union_dues|money }} so'm</span></li>
+  <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— Ijtimoiy soliq (ish beruvchi)</span><span>{{ r.social_tax|money }} so'm</span></li>
+  <li class="list-group-item d-flex justify-content-between bg-light"><span class="fw-semibold">Sof (qo'lga tegadigan)</span><strong>{{ r.net|money }} so'm</strong></li>
+</ul>

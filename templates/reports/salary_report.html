@@ -9,63 +9,49 @@
   <input name="month" value="{{ month }}" class="form-control" style="max-width:120px">
   <button class="btn btn-outline-primary">Ko'rsatish</button>
 </form>
-<div class="card">
-  <div class="card-header bg-white fw-semibold">Filiallar bo'yicha ({{ month }}-{{ year }})</div>
-  <div class="table-responsive">
-    <table class="table">
-      <thead class="table-light">
-        <tr>
-          <th>Filial</th>
-          <th class="text-end">Xodimlar</th>
-          <th class="text-end">Yalpi oylik</th>
-          <th class="text-end">Avans</th>
-          <th class="text-end">Ushlab qolingan (jami)</th>
-          <th class="text-end">NDFL</th>
-          <th class="text-end">INPS</th>
-          <th class="text-end">Profsoyuz badali</th>
-          <th class="text-end">Ijtimoiy soliq</th>
-          <th class="text-end">Sof (qo'lga tegadigan)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-        <tr>
-          <td>{{ r.unit.name }}</td>
-          <td class="text-end">{{ r.employees }}</td>
-          <td class="text-end text-nowrap">{{ r.gross|money }}</td>
-          <td class="text-end text-nowrap">{{ r.advance|money }}</td>
-          <td class="text-end text-nowrap">{{ r.deductions|money }}</td>
-          <td class="text-end text-nowrap">{{ r.income_tax|money }}</td>
-          <td class="text-end text-nowrap">{{ r.pension_contribution|money }}</td>
-          <td class="text-end text-nowrap">{{ r.union_dues|money }}</td>
-          <td class="text-end text-nowrap">{{ r.social_tax|money }}</td>
-          <td class="text-end text-nowrap"><strong>{{ r.net|money }}</strong></td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="10" class="text-muted">Bu davr uchun ma'lumot yo'q.</td></tr>
-        {% endfor %}
-      </tbody>
-      {% if is_global and rows %}
-      <tfoot>
-        <tr class="fw-semibold table-light">
-          <td>Jami</td>
-          <td class="text-end">{{ totals.employees }}</td>
-          <td class="text-end text-nowrap">{{ totals.gross|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.advance|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.deductions|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.income_tax|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.pension_contribution|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.union_dues|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.social_tax|money }}</td>
-          <td class="text-end text-nowrap">{{ totals.net|money }}</td>
-        </tr>
-      </tfoot>
-      {% endif %}
-    </table>
-  </div>
-  <div class="card-footer text-muted small">
-    Ijtimoiy soliq — ish beruvchi harajati, xodim oyligidan ushlab qolinmaydi (sof summaga ta'sir qilmaydi).
-    Jadval keng bo'lsa, uni chapga/o'ngga surib ko'rish mumkin.
+
+{% if not rows %}
+<div class="card"><div class="card-body text-muted">Bu davr uchun ma'lumot yo'q.</div></div>
+
+{% elif is_global and rows|length > 1 %}
+<div class="card mb-3 border-primary">
+  <div class="card-header bg-white fw-semibold">Barcha filiallar bo'yicha jami ({{ month }}-{{ year }})</div>
+  <div class="card-body py-2">
+    {% include "reports/_salary_breakdown.html" with r=totals %}
   </div>
 </div>
+
+<div class="accordion" id="branchAccordion">
+  {% for r in rows %}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#branch{{ forloop.counter }}">
+        <span class="flex-grow-1">{{ r.unit.name }}</span>
+        <span class="text-muted small text-nowrap me-2">{{ r.employees }} xodim · {{ r.net|money }} so'm</span>
+      </button>
+    </h2>
+    <div id="branch{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#branchAccordion">
+      <div class="accordion-body p-0">
+        {% include "reports/_salary_breakdown.html" %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+{# Branch/accountant admin: only ever one row — show it directly, no need to click anything. #}
+{% for r in rows %}
+<div class="card">
+  <div class="card-header bg-white fw-semibold">{{ r.unit.name }} ({{ month }}-{{ year }})</div>
+  <div class="card-body py-2">
+    {% include "reports/_salary_breakdown.html" %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<p class="text-muted small mt-3">
+  Ijtimoiy soliq — ish beruvchi harajati, xodim oyligidan ushlab qolinmaydi (sof summaga ta'sir qilmaydi).
+</p>
 {% endblock %}
