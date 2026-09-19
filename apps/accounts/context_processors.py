@@ -11,5 +11,6 @@ def sidebar_context(request):
         "nav_can_manage_admins": user.can_manage_admins(),
         "nav_can_import": user.can_import_salary(),
         "nav_can_manage_employees": user.can_manage_employees(),
+        "nav_can_view_salary_report": user.can_view_salary_report(),
         "nav_is_global": user.is_global_scope,
     }

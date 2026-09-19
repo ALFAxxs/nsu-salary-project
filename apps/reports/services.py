@@ -119,3 +119,61 @@ class ReportService:
                 "failed": m.get("failed", 0),
             })
         return rows
+
+    @staticmethod
+    def salary_totals(user, *, year: int, month: int) -> dict:
+        """
+        Per-branch payroll totals for one period (spec: filial/oy bo'yicha
+        yalpi/avans/ushlab qolingan/sof umumiy hisobot) — HR-restricted, see
+        User.can_view_salary_report. Branch/accountant admins only ever get
+        their own unit (accessible_unit_ids scopes `units` below to one row);
+        head office/super admin get every branch plus a grand total.
+
+        "employees" is a distinct headcount (Count(..., distinct=True)) since
+        one employee can have more than one current Salary row this period
+        (two branches, or two positions in one branch) — the money sums
+        below intentionally still include every such row, since each is a
+        real, separate payment.
+        """
+        from apps.accounts.permissions import scope_organization_units
+
+        units = list(scope_organization_units(
+            OrganizationUnit.objects.filter(is_active=True), user
+        ))
+        unit_ids = [u.id for u in units]
+
+        sal_qs = Salary.objects.filter(
+            organization_unit_id__in=unit_ids, is_current=True,
+            period_year=year, period_month=month,
+        )
+        stats = {
+            row["organization_unit_id"]: row
+            for row in sal_qs.values("organization_unit_id").annotate(
+                employees=Count("employee", distinct=True),
+                gross=Sum("gross_salary"),
+                advance=Sum("advance"),
+                deductions=Sum("deductions"),
+                net=Sum("net_salary"),
+            )
+        }
+
+        rows = []
+        for unit in units:
+            s = stats.get(unit.id, {})
+            rows.append({
+                "unit": unit,
+                "employees": s.get("employees") or 0,
+                "gross": s.get("gross") or 0,
+                "advance": s.get("advance") or 0,
+                "deductions": s.get("deductions") or 0,
+                "net": s.get("net") or 0,
+            })
+
+        totals = {
+            "employees": sum(r["employees"] for r in rows),
+            "gross": sum(r["gross"] for r in rows),
+            "advance": sum(r["advance"] for r in rows),
+            "deductions": sum(r["deductions"] for r in rows),
+            "net": sum(r["net"] for r in rows),
+        }
+        return {"rows": rows, "totals": totals}

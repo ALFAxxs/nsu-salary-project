@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Moliyaviy hisobot{% endblock %}
+{% block page_title %}Moliyaviy hisobot{% endblock %}
+{% block nav_salary_report %}active{% endblock %}
+{% block content %}
+<form method="get" class="d-flex gap-2 mb-3">
+  <input name="year" value="{{ year }}" class="form-control" style="max-width:120px">
+  <input name="month" value="{{ month }}" class="form-control" style="max-width:120px">
+  <button class="btn btn-outline-primary">Ko'rsatish</button>
+</form>
+<div class="card">
+  <div class="card-header bg-white fw-semibold">Filiallar bo'yicha ({{ month }}-{{ year }})</div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead class="table-light">
+        <tr>
+          <th>Filial</th>
+          <th>Xodimlar</th>
+          <th>Yalpi oylik</th>
+          <th>Avans</th>
+          <th>Ushlab qolingan (soliq va boshqalar)</th>
+          <th>Sof (qo'lga tegadigan)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.unit.name }}</td>
+          <td>{{ r.employees }}</td>
+          <td>{{ r.gross }}</td>
+          <td>{{ r.advance }}</td>
+          <td>{{ r.deductions }}</td>
+          <td>{{ r.net }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-muted">Bu davr uchun ma'lumot yo'q.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if is_global and rows %}
+      <tfoot>
+        <tr class="fw-semibold table-light">
+          <td>Jami</td>
+          <td>{{ totals.employees }}</td>
+          <td>{{ totals.gross }}</td>
+          <td>{{ totals.advance }}</td>
+          <td>{{ totals.deductions }}</td>
+          <td>{{ totals.net }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}
