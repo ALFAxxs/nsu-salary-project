@@ -75,9 +75,22 @@ def format_salary_message(salary: Salary) -> str:
         f"📅 Hisoblangan davr: {salary.period_label}\n\n"
         f"💰 Hisoblangan ish haqi: {_fmt_money(salary.gross_salary)} so'm\n"
         f"💳 Avans: {_fmt_money(salary.advance)} so'm\n"
-        f"➖ Ushlanmalar: {_fmt_money(salary.deductions)} so'm\n\n"
-        f"✅ Plastik kartaga tushadigan summa: {_fmt_money(salary.net_salary)} so'm"
+        f"➖ Ushlanmalar: {_fmt_money(salary.deductions)} so'm\n"
     )
+    # Breakdown of "Ushlanmalar" — shown only when the source file actually
+    # carried these columns (kept out of the message otherwise, since 0 would
+    # misleadingly read as "nothing was withheld"). Social tax deliberately
+    # excluded — it's an employer-side cost, never withheld from this
+    # employee's own pay (see Salary.social_tax).
+    breakdown = [
+        ("   • NDFL (daromad solig'i)", salary.income_tax),
+        ("   • INPS (pensiya jamg'armasi)", salary.pension_contribution),
+        ("   • Profsoyuz badali", salary.union_dues),
+    ]
+    for label, value in breakdown:
+        if value:
+            text += f"{label}: {_fmt_money(value)} so'm\n"
+    text += f"\n✅ Plastik kartaga tushadigan summa: {_fmt_money(salary.net_salary)} so'm"
     components = salary.components or []
     if components:
         lines = ["\n\n📋 Qo'shimcha ma'lumotlar:"]

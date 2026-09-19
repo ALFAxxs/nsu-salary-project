@@ -129,6 +129,9 @@ def _salary_dict(s: Salary) -> dict:
         "gross": s.gross_salary,
         "advance": s.advance,
         "deductions": s.deductions,
+        "income_tax": s.income_tax,
+        "pension_contribution": s.pension_contribution,
+        "union_dues": s.union_dues,
         "net": s.net_salary,
         "components": s.components or [],
     }

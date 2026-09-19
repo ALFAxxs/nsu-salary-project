@@ -484,9 +484,21 @@ def _one_salary_text(s: dict) -> str:
         f"📅 {s['period_label']} — {s['unit']}\n\n"
         f"💰 Hisoblangan: {_fmt(s['gross'])} so'm\n"
         f"💳 Avans: {_fmt(s['advance'])} so'm\n"
-        f"➖ Ushlanmalar: {_fmt(s['deductions'])} so'm\n\n"
-        f"✅ Qo'lga: {_fmt(s['net'])} so'm"
+        f"➖ Ushlanmalar: {_fmt(s['deductions'])} so'm\n"
     )
+    # Breakdown of "Ushlanmalar" — only shown when present, same reasoning
+    # as apps.notifications.services.format_salary_message. Social tax
+    # excluded on purpose: employer-side cost, not withheld from this
+    # employee's own pay.
+    for label, key in (
+        ("   • NDFL (daromad solig'i)", "income_tax"),
+        ("   • INPS (pensiya jamg'armasi)", "pension_contribution"),
+        ("   • Profsoyuz badali", "union_dues"),
+    ):
+        value = s.get(key)
+        if value:
+            text += f"{label}: {_fmt(value)} so'm\n"
+    text += f"\n✅ Qo'lga: {_fmt(s['net'])} so'm"
     components = s.get("components") or []
     if components:
         lines = ["\n\n📋 Qo'shimcha ma'lumotlar:"]

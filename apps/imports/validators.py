@@ -70,6 +70,10 @@ CANONICAL_FIELDS = [
     "gross_salary",
     "advance",
     "deductions",
+    "income_tax",
+    "pension_contribution",
+    "union_dues",
+    "social_tax",
     "net_salary",
 ]
 
@@ -85,6 +89,21 @@ DEFAULT_HEADER_CANDIDATES: dict[str, list[str]] = {
     "gross_salary": ["gross_salary", "всего начислено"],
     "advance": ["advance", "аванс"],
     "deductions": ["deductions", "всего удержано"],
+    # Breakdown of `deductions` — confirmed identical wording across every
+    # branch's 1C export we've compared (see apps.salaries.models.Salary
+    # docstring), unlike the 50+ bonus/allowance columns which vary too much
+    # to ever get their own canonical field.
+    "income_tax": ["income_tax", "ндфл"],
+    "pension_contribution": ["pension_contribution", "инпс"],
+    "union_dues": [
+        "union_dues",
+        "удержание членских профсоюзных взносов 1%",
+        "удержание членских профсоюзных взносов 1 %(фикс)",
+    ],
+    # Employer-side cost, not withheld from the employee (see the model) —
+    # still recognized here so it lands in its own column instead of
+    # `components`, purely for company-cost reporting.
+    "social_tax": ["social_tax", "социальный налог"],
     # "Выплачено" (paid out) and "Сальдо на конец" (balance) are mutually
     # exclusive in the exports we've seen — each employee row fills exactly
     # one, never both — so both are tried and whichever one has a value on
@@ -101,7 +120,11 @@ DEFAULT_HEADERS = {field: candidates[0] for field, candidates in DEFAULT_HEADER_
 # row in _validate_row, not here, since it's an "either/or" not an "all").
 REQUIRED_ALL = ["net_salary"]
 
-MONEY_FIELDS = ["gross_salary", "advance", "deductions", "net_salary"]
+MONEY_FIELDS = [
+    "gross_salary", "advance", "deductions",
+    "income_tax", "pension_contribution", "union_dues", "social_tax",
+    "net_salary",
+]
 
 # Header text (case-insensitive) that must NEVER reach the employee even
 # though it isn't one of the 7 canonical fields: row numbering, duplicate

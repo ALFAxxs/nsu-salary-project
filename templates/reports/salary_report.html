@@ -18,7 +18,11 @@
           <th>Xodimlar</th>
           <th>Yalpi oylik</th>
           <th>Avans</th>
-          <th>Ushlab qolingan (soliq va boshqalar)</th>
+          <th>Ushlab qolingan (jami)</th>
+          <th>NDFL</th>
+          <th>INPS</th>
+          <th>Profsoyuz badali</th>
+          <th>Ijtimoiy soliq</th>
           <th>Sof (qo'lga tegadigan)</th>
         </tr>
       </thead>
@@ -30,10 +34,14 @@
           <td>{{ r.gross }}</td>
           <td>{{ r.advance }}</td>
           <td>{{ r.deductions }}</td>
+          <td>{{ r.income_tax }}</td>
+          <td>{{ r.pension_contribution }}</td>
+          <td>{{ r.union_dues }}</td>
+          <td>{{ r.social_tax }}</td>
           <td>{{ r.net }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-muted">Bu davr uchun ma'lumot yo'q.</td></tr>
+        <tr><td colspan="10" class="text-muted">Bu davr uchun ma'lumot yo'q.</td></tr>
         {% endfor %}
       </tbody>
       {% if is_global and rows %}
@@ -44,11 +52,18 @@
           <td>{{ totals.gross }}</td>
           <td>{{ totals.advance }}</td>
           <td>{{ totals.deductions }}</td>
+          <td>{{ totals.income_tax }}</td>
+          <td>{{ totals.pension_contribution }}</td>
+          <td>{{ totals.union_dues }}</td>
+          <td>{{ totals.social_tax }}</td>
           <td>{{ totals.net }}</td>
         </tr>
       </tfoot>
       {% endif %}
     </table>
+  </div>
+  <div class="card-footer text-muted small">
+    Ijtimoiy soliq — ish beruvchi harajati, xodim oyligidan ushlab qolinmaydi (sof summaga ta'sir qilmaydi).
   </div>
 </div>
 {% endblock %}

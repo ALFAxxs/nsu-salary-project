@@ -24,9 +24,13 @@ Design decisions:
     Instead we keep the old row as a revision (is_current=False) and create
     a new current row. This preserves an audit trail of corrections (spec
     §10 "import revision/history").
-  * Extra components (bonus, tax, pension, overtime...) live in a JSON `components`
-    field plus a few first-class columns, so the model extends without migrations
-    for every new payroll element (spec §11).
+  * Extra components (the 50+ bonus/allowance/overtime line items a real 1C
+    payroll export can carry, whose exact set and wording genuinely differs
+    file to file — see apps.imports.validators) live in a JSON `components`
+    field, so the model extends without migrations for those. The handful of
+    figures proven stable across every branch's export (gross/advance/
+    deductions/net, income_tax, pension_contribution, union_dues, social_tax)
+    are first-class columns instead, for reliable reporting (spec §11).
 """
 from __future__ import annotations
 
@@ -77,6 +81,28 @@ class Salary(models.Model):
     )
     deductions = models.DecimalField(
         _("deductions"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    # Breakdown of `deductions` — unlike the 50+ bonus/allowance line items
+    # (which vary too much file-to-file to ever be stable columns, see
+    # Salary.components below), these four appear under this exact same
+    # header text in every real payroll export we've compared (10 files,
+    # 8 branches): НДФЛ, ИНПС, "Удержание членских профсоюзных взносов",
+    # Социальный налог. Optional (default 0) since older imports and any
+    # future file missing one of these columns still validate fine.
+    income_tax = models.DecimalField(
+        _("income tax (NDFL)"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    pension_contribution = models.DecimalField(
+        _("pension contribution (INPS)"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    union_dues = models.DecimalField(
+        _("union dues"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    # Employer-side cost, NOT withheld from the employee's own pay (so it
+    # plays no part in net_salary) — kept for company-cost reporting only,
+    # and deliberately left out of the employee-facing message.
+    social_tax = models.DecimalField(
+        _("social tax"), max_digits=14, decimal_places=2, default=Decimal("0")
     )
     net_salary = models.DecimalField(
         _("net salary"), max_digits=14, decimal_places=2, default=Decimal("0")

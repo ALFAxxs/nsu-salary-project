@@ -153,6 +153,10 @@ class ReportService:
                 gross=Sum("gross_salary"),
                 advance=Sum("advance"),
                 deductions=Sum("deductions"),
+                income_tax=Sum("income_tax"),
+                pension_contribution=Sum("pension_contribution"),
+                union_dues=Sum("union_dues"),
+                social_tax=Sum("social_tax"),
                 net=Sum("net_salary"),
             )
         }
@@ -166,6 +170,10 @@ class ReportService:
                 "gross": s.get("gross") or 0,
                 "advance": s.get("advance") or 0,
                 "deductions": s.get("deductions") or 0,
+                "income_tax": s.get("income_tax") or 0,
+                "pension_contribution": s.get("pension_contribution") or 0,
+                "union_dues": s.get("union_dues") or 0,
+                "social_tax": s.get("social_tax") or 0,
                 "net": s.get("net") or 0,
             })
 
@@ -174,6 +182,10 @@ class ReportService:
             "gross": sum(r["gross"] for r in rows),
             "advance": sum(r["advance"] for r in rows),
             "deductions": sum(r["deductions"] for r in rows),
+            "income_tax": sum(r["income_tax"] for r in rows),
+            "pension_contribution": sum(r["pension_contribution"] for r in rows),
+            "union_dues": sum(r["union_dues"] for r in rows),
+            "social_tax": sum(r["social_tax"] for r in rows),
             "net": sum(r["net"] for r in rows),
         }
         return {"rows": rows, "totals": totals}

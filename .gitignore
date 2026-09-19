@@ -21,6 +21,9 @@ __pycache__/
 full_dump.txt
 template_dump*.txt
 template_indexed.txt
+# Real branch payroll exports kept locally to reverse-engineer the
+# canonical field set (see apps/imports/validators.py) — same PII concern.
+/template/
 
 # Internal business/cost documentation — kept local, not on GitHub.
 /*.docx

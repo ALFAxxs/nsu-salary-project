@@ -67,11 +67,15 @@ def salary_export_csv(request):
     response["Content-Disposition"] = 'attachment; filename="salaries.csv"'
     writer = csv.writer(response)
     writer.writerow(["Employee code", "Full name", "Branch", "Period",
-                     "Gross", "Advance", "Deductions", "Net"])
+                     "Gross", "Advance", "Deductions",
+                     "Income tax", "Pension contribution", "Union dues", "Social tax",
+                     "Net"])
     for s in qs.select_related("employee", "organization_unit"):
         writer.writerow([
             safe_cell(s.employee.employee_code), safe_cell(s.employee.full_name),
             safe_cell(s.organization_unit.name), f"{s.period_year}-{s.period_month:02d}",
-            s.gross_salary, s.advance, s.deductions, s.net_salary,
+            s.gross_salary, s.advance, s.deductions,
+            s.income_tax, s.pension_contribution, s.union_dues, s.social_tax,
+            s.net_salary,
         ])
     return response

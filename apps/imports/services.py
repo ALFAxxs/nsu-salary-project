@@ -109,6 +109,10 @@ class SalaryImportService:
                 gross=norm.get("gross_salary", "0"),
                 advance=norm.get("advance", "0"),
                 deductions=norm.get("deductions", "0"),
+                income_tax=norm.get("income_tax", "0"),
+                pension_contribution=norm.get("pension_contribution", "0"),
+                union_dues=norm.get("union_dues", "0"),
+                social_tax=norm.get("social_tax", "0"),
                 net=norm.get("net_salary", "0"),
                 components=row.get("components", []),
                 payroll_jshshir=norm.get("jshshir", ""),
@@ -134,6 +138,7 @@ class SalaryImportService:
 
     @staticmethod
     def _upsert_salary(*, salary_import, employee_id, gross, advance, deductions, net,
+                       income_tax="0", pension_contribution="0", union_dues="0", social_tax="0",
                        components=None, payroll_jshshir="", payroll_employee_code=""):
         from decimal import Decimal
 
@@ -160,10 +165,18 @@ class SalaryImportService:
         )
         gross_d, advance_d = Decimal(str(gross)), Decimal(str(advance))
         deductions_d, net_d = Decimal(str(deductions)), Decimal(str(net))
+        income_tax_d = Decimal(str(income_tax))
+        pension_d = Decimal(str(pension_contribution))
+        union_dues_d = Decimal(str(union_dues))
+        social_tax_d = Decimal(str(social_tax))
         if existing is not None and (
             existing.gross_salary == gross_d
             and existing.advance == advance_d
             and existing.deductions == deductions_d
+            and existing.income_tax == income_tax_d
+            and existing.pension_contribution == pension_d
+            and existing.union_dues == union_dues_d
+            and existing.social_tax == social_tax_d
             and existing.net_salary == net_d
             and existing.payroll_jshshir == (payroll_jshshir or "")
             and existing.components == (components or [])
@@ -188,6 +201,10 @@ class SalaryImportService:
             gross_salary=gross_d,
             advance=advance_d,
             deductions=deductions_d,
+            income_tax=income_tax_d,
+            pension_contribution=pension_d,
+            union_dues=union_dues_d,
+            social_tax=social_tax_d,
             net_salary=net_d,
             components=components or [],
             payroll_jshshir=payroll_jshshir or "",
@@ -211,9 +228,9 @@ class SalaryImportService:
         ws = wb.active
         ws.title = "Salary"
         ws.append(headers)
-        # Example row.
+        # Example row (order matches CANONICAL_FIELDS).
         ws.append(["EMP-001", "998901234567", "30101234567890", "Aliyev Ali",
-                   8000000, 2000000, 100000, 5900000])
+                   8000000, 2000000, 100000, 700000, 50000, 50000, 800000, 5900000])
         buf = io.BytesIO()
         wb.save(buf)
         return buf.getvalue()

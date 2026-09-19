@@ -36,6 +36,7 @@ class SalarySerializer(serializers.ModelSerializer):
         model = Salary
         fields = ["id", "employee", "employee_name", "period_year", "period_month",
                   "period_label", "gross_salary", "advance", "deductions",
+                  "income_tax", "pension_contribution", "union_dues", "social_tax",
                   "net_salary", "currency", "is_current", "revision"]
 
 
