@@ -165,8 +165,9 @@ CONSENT_FULL_TEXT = (
 CONSENT_INTRO_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="📄 To'liq tanishish", callback_data="consent:full")]
 ])
-CONSENT_AGREE_KB = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="✅ Roziman", callback_data="consent:agree")]
+CONSENT_DECISION_KB = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="✅ Roziman", callback_data="consent:agree")],
+    [InlineKeyboardButton(text="❌ Rad etaman", callback_data="consent:decline")],
 ])
 
 dp = Dispatcher(storage=MemoryStorage())
@@ -215,19 +216,34 @@ async def cmd_start(message: Message, state: FSMContext):
 @dp.callback_query(F.data == "consent:full")
 async def consent_show_full(callback: CallbackQuery):
     # A separate message, not an edit — the short intro stays visible above it.
-    await callback.message.answer(CONSENT_FULL_TEXT, reply_markup=CONSENT_AGREE_KB)
+    await callback.message.answer(CONSENT_FULL_TEXT, reply_markup=CONSENT_DECISION_KB)
     await callback.answer()
 
 
 @dp.callback_query(F.data == "consent:agree")
 async def consent_agree(callback: CallbackQuery):
     await data.record_consent(callback.from_user.id)
-    await callback.message.edit_reply_markup(reply_markup=None)  # "Roziman" no longer clickable
+    await callback.message.edit_reply_markup(reply_markup=None)  # buttons no longer clickable
     await callback.message.answer(
         "Rahmat! Endi telefon raqamingizni tasdiqlang.",
         reply_markup=CONTACT_KB,
     )
     await callback.answer("Rozilik qabul qilindi.")
+
+
+@dp.callback_query(F.data == "consent:decline")
+async def consent_decline(callback: CallbackQuery, state: FSMContext):
+    # No consent recorded -> the bot cannot be used at all (spec: rad etsa
+    # botdan foydalana olmasin). Send them back to the very start of the
+    # consent flow instead of leaving them stuck with no way forward.
+    await state.clear()
+    await callback.message.edit_reply_markup(reply_markup=None)  # buttons no longer clickable
+    await callback.message.answer(
+        "Siz shaxsga doir ma'lumotlarni qayta ishlashga rozilik bermadingiz. "
+        "Botdan foydalanish uchun rozilik shart."
+    )
+    await callback.message.answer(CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
+    await callback.answer("Rad etildi.")
 
 
 # --- Contact + JSHSHIR verification (two-factor, spec §8) ------------------ #
