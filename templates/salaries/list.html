@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load report_extras %}
 {% block title %}Oyliklar{% endblock %}
 {% block page_title %}Oyliklar{% endblock %}
 {% block nav_salaries %}active{% endblock %}
@@ -12,8 +13,8 @@
 </form>
 <a href="{% url 'salaries:export_csv' %}?q={{ search }}&unit={{ selected_unit }}&year={{ year }}&month={{ month }}" class="btn btn-sm btn-outline-success mb-2"><i class="bi bi-filetype-csv"></i> CSV Export</a>
 <div class="card"><div class="table-responsive"><table class="table table-hover align-middle">
-  <thead class="table-light"><tr><th>Xodim</th><th>Filial</th><th>Davr</th><th>Hisoblangan</th><th>Avans</th><th>Ushlanma</th><th>NDFL</th><th>INPS</th><th>Profsoyuz</th><th>Ijtimoiy soliq</th><th>Qo'lga</th></tr></thead>
-  <tbody>{% for s in page %}<tr><td>{{ s.employee.full_name }}</td><td>{{ s.organization_unit.name }}</td><td>{{ s.period_label }}</td><td>{{ s.gross_salary }}</td><td>{{ s.advance }}</td><td>{{ s.deductions }}</td><td>{{ s.income_tax }}</td><td>{{ s.pension_contribution }}</td><td>{{ s.union_dues }}</td><td>{{ s.social_tax }}</td><td><strong>{{ s.net_salary }}</strong></td></tr>{% empty %}<tr><td colspan="11" class="text-center text-muted py-4">Ma'lumot yo'q</td></tr>{% endfor %}</tbody>
+  <thead class="table-light"><tr><th>Xodim</th><th>Filial</th><th>Davr</th><th class="text-end">Hisoblangan</th><th class="text-end">Avans</th><th class="text-end">Ushlanma</th><th class="text-end">NDFL</th><th class="text-end">INPS</th><th class="text-end">Profsoyuz</th><th class="text-end">Ijtimoiy soliq</th><th class="text-end">Qo'lga</th></tr></thead>
+  <tbody>{% for s in page %}<tr><td>{{ s.employee.full_name }}</td><td>{{ s.organization_unit.name }}</td><td>{{ s.period_label }}</td><td class="text-end text-nowrap">{{ s.gross_salary|money }}</td><td class="text-end text-nowrap">{{ s.advance|money }}</td><td class="text-end text-nowrap">{{ s.deductions|money }}</td><td class="text-end text-nowrap">{{ s.income_tax|money }}</td><td class="text-end text-nowrap">{{ s.pension_contribution|money }}</td><td class="text-end text-nowrap">{{ s.union_dues|money }}</td><td class="text-end text-nowrap">{{ s.social_tax|money }}</td><td class="text-end text-nowrap"><strong>{{ s.net_salary|money }}</strong></td></tr>{% empty %}<tr><td colspan="11" class="text-center text-muted py-4">Ma'lumot yo'q</td></tr>{% endfor %}</tbody>
 </table></div></div>
 {% include "partials/pagination.html" %}
 {% endblock %}

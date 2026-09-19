@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load report_extras %}
 {% block title %}Moliyaviy hisobot{% endblock %}
 {% block page_title %}Moliyaviy hisobot{% endblock %}
 {% block nav_salary_report %}active{% endblock %}
@@ -15,30 +16,30 @@
       <thead class="table-light">
         <tr>
           <th>Filial</th>
-          <th>Xodimlar</th>
-          <th>Yalpi oylik</th>
-          <th>Avans</th>
-          <th>Ushlab qolingan (jami)</th>
-          <th>NDFL</th>
-          <th>INPS</th>
-          <th>Profsoyuz badali</th>
-          <th>Ijtimoiy soliq</th>
-          <th>Sof (qo'lga tegadigan)</th>
+          <th class="text-end">Xodimlar</th>
+          <th class="text-end">Yalpi oylik</th>
+          <th class="text-end">Avans</th>
+          <th class="text-end">Ushlab qolingan (jami)</th>
+          <th class="text-end">NDFL</th>
+          <th class="text-end">INPS</th>
+          <th class="text-end">Profsoyuz badali</th>
+          <th class="text-end">Ijtimoiy soliq</th>
+          <th class="text-end">Sof (qo'lga tegadigan)</th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
         <tr>
           <td>{{ r.unit.name }}</td>
-          <td>{{ r.employees }}</td>
-          <td>{{ r.gross }}</td>
-          <td>{{ r.advance }}</td>
-          <td>{{ r.deductions }}</td>
-          <td>{{ r.income_tax }}</td>
-          <td>{{ r.pension_contribution }}</td>
-          <td>{{ r.union_dues }}</td>
-          <td>{{ r.social_tax }}</td>
-          <td>{{ r.net }}</td>
+          <td class="text-end">{{ r.employees }}</td>
+          <td class="text-end text-nowrap">{{ r.gross|money }}</td>
+          <td class="text-end text-nowrap">{{ r.advance|money }}</td>
+          <td class="text-end text-nowrap">{{ r.deductions|money }}</td>
+          <td class="text-end text-nowrap">{{ r.income_tax|money }}</td>
+          <td class="text-end text-nowrap">{{ r.pension_contribution|money }}</td>
+          <td class="text-end text-nowrap">{{ r.union_dues|money }}</td>
+          <td class="text-end text-nowrap">{{ r.social_tax|money }}</td>
+          <td class="text-end text-nowrap"><strong>{{ r.net|money }}</strong></td>
         </tr>
         {% empty %}
         <tr><td colspan="10" class="text-muted">Bu davr uchun ma'lumot yo'q.</td></tr>
@@ -48,15 +49,15 @@
       <tfoot>
         <tr class="fw-semibold table-light">
           <td>Jami</td>
-          <td>{{ totals.employees }}</td>
-          <td>{{ totals.gross }}</td>
-          <td>{{ totals.advance }}</td>
-          <td>{{ totals.deductions }}</td>
-          <td>{{ totals.income_tax }}</td>
-          <td>{{ totals.pension_contribution }}</td>
-          <td>{{ totals.union_dues }}</td>
-          <td>{{ totals.social_tax }}</td>
-          <td>{{ totals.net }}</td>
+          <td class="text-end">{{ totals.employees }}</td>
+          <td class="text-end text-nowrap">{{ totals.gross|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.advance|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.deductions|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.income_tax|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.pension_contribution|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.union_dues|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.social_tax|money }}</td>
+          <td class="text-end text-nowrap">{{ totals.net|money }}</td>
         </tr>
       </tfoot>
       {% endif %}
@@ -64,6 +65,7 @@
   </div>
   <div class="card-footer text-muted small">
     Ijtimoiy soliq — ish beruvchi harajati, xodim oyligidan ushlab qolinmaydi (sof summaga ta'sir qilmaydi).
+    Jadval keng bo'lsa, uni chapga/o'ngga surib ko'rish mumkin.
   </div>
 </div>
 {% endblock %}

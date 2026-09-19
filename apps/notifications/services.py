@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from django.db import transaction
 
+from apps.common.money import format_money as _fmt_money
 from apps.imports.models import SalaryImport
 from apps.notifications.models import (
     BroadcastMessage,
@@ -42,15 +43,6 @@ def _eligible_status(salary: Salary, employee) -> str:
     # No JSHSHIR in this payroll row at all -> nothing to cross-check against,
     # fall back to the phone-link check alone (backward compatible).
     return MessageStatus.PENDING
-
-
-def _fmt_money(value) -> str:
-    """Group thousands with spaces: 5900000 -> '5 900 000'."""
-    try:
-        n = int(round(float(value)))
-    except (TypeError, ValueError):
-        return str(value)
-    return f"{n:,}".replace(",", " ")
 
 
 TELEGRAM_MESSAGE_LIMIT = 4096

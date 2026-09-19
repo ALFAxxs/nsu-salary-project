@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load report_extras %}
 {% block title %}Hisobotlar{% endblock %}
 {% block page_title %}Hisobotlar{% endblock %}
 {% block nav_reports %}active{% endblock %}
@@ -10,7 +11,7 @@
 </form>
 <div class="stat-grid">
   <div class="stat-card"><div class="label">Xodimlar</div><div class="value">{{ summary.total_employees }}</div></div>
-  <div class="stat-card blue"><div class="label">Umumiy payroll</div><div class="value" style="font-size:1.3rem">{{ summary.total_payroll }}</div></div>
+  <div class="stat-card blue"><div class="label">Umumiy payroll</div><div class="value" style="font-size:1.3rem">{{ summary.total_payroll|money }}</div></div>
   <div class="stat-card green"><div class="label">Yuborilgan</div><div class="value">{{ summary.messages_sent }}</div></div>
   <div class="stat-card red"><div class="label">Xato</div><div class="value">{{ summary.messages_failed }}</div></div>
 </div>

@@ -46,17 +46,10 @@ from aiogram.types import (  # noqa: E402
 from django.conf import settings  # noqa: E402
 
 from apps.common.jshshir import is_valid_jshshir, normalize_jshshir  # noqa: E402
+from apps.common.money import format_money as _fmt  # noqa: E402
 from apps.telegram_bot import data  # noqa: E402
 
 logger = logging.getLogger("apps.telegram_bot")
-
-
-def _fmt(value) -> str:
-    try:
-        n = int(round(float(value)))
-    except (TypeError, ValueError):
-        return str(value)
-    return f"{n:,}".replace(",", " ")
 
 
 class LinkStates(StatesGroup):
