@@ -6,7 +6,20 @@
 {% block content %}
 <form method="get" class="d-flex gap-2 mb-3">
   <input name="year" value="{{ year }}" class="form-control" style="max-width:120px">
-  <input name="month" value="{{ month }}" class="form-control" style="max-width:120px">
+  <select name="month" class="form-select" style="max-width:170px">
+    <option value="1" {% if month == 1 %}selected{% endif %}>1-Yanvar</option>
+    <option value="2" {% if month == 2 %}selected{% endif %}>2-Fevral</option>
+    <option value="3" {% if month == 3 %}selected{% endif %}>3-Mart</option>
+    <option value="4" {% if month == 4 %}selected{% endif %}>4-Aprel</option>
+    <option value="5" {% if month == 5 %}selected{% endif %}>5-May</option>
+    <option value="6" {% if month == 6 %}selected{% endif %}>6-Iyun</option>
+    <option value="7" {% if month == 7 %}selected{% endif %}>7-Iyul</option>
+    <option value="8" {% if month == 8 %}selected{% endif %}>8-Avgust</option>
+    <option value="9" {% if month == 9 %}selected{% endif %}>9-Sentabr</option>
+    <option value="10" {% if month == 10 %}selected{% endif %}>10-Oktabr</option>
+    <option value="11" {% if month == 11 %}selected{% endif %}>11-Noyabr</option>
+    <option value="12" {% if month == 12 %}selected{% endif %}>12-Dekabr</option>
+  </select>
   <button class="btn btn-outline-primary">Ko'rsatish</button>
 </form>
 
