@@ -189,9 +189,13 @@ def _months_keyboard(year: int, months: list[int]) -> InlineKeyboardMarkup:
 # — left alone they just pile up in the chat forever. `_prompt` sends a new
 # step message and deletes the PREVIOUS tracked one (best-effort: Telegram
 # may refuse if it's already gone or too old, which is fine either way).
-# `_clear_prompt` is for a message that should stay visible once sent (the
-# full legal consent text, a final linking result) — it deletes whatever
-# was tracked without starting to track the new message in its place. ---- #
+# `_clear_prompt` deletes whatever was tracked without sending/tracking a
+# replacement (used right before a message that manages its own lifecycle
+# instead — the full consent text, which becomes the next tracked prompt
+# itself, or the ephemeral final result, see _send_ephemeral below).
+# `_delete_incoming` is the same idea applied to the USER's own messages
+# (the shared contact, the typed JSHSHIR) — Telegram bots can delete
+# incoming messages in private chats too, not just their own. --------- #
 async def _prompt(msg: Message, state: FSMContext, text: str, reply_markup=None) -> None:
     stored = await state.get_data()
     old_id = stored.get("_prompt_id")
@@ -213,6 +217,19 @@ async def _clear_prompt(msg: Message, state: FSMContext) -> None:
         except Exception:
             pass
         await state.update_data(_prompt_id=None)
+
+
+async def _delete_incoming(msg: Message) -> None:
+    """Best-effort delete of the user's OWN message, once it's been acted
+    on — Telegram bots can delete incoming messages in private chats (this
+    bot never runs in groups), so the shared contact card and the typed
+    JSHSHIR don't linger in the chat either, not just the bot's own
+    prompts. JSHSHIR especially: it's sensitive PII, worth clearing out of
+    the chat log the moment it's been used to verify identity."""
+    try:
+        await msg.delete()
+    except Exception:
+        pass
 
 
 EPHEMERAL_RESULT_DELAY = 15  # seconds a final linking result stays visible
@@ -341,6 +358,7 @@ async def on_contact(message: Message, state: FSMContext):
         "— 14 ta raqam.",
         reply_markup=ReplyKeyboardRemove(),
     )
+    await _delete_incoming(message)  # the shared contact card itself
 
 
 @dp.message(LinkStates.waiting_for_jshshir)
@@ -352,12 +370,14 @@ async def on_jshshir(message: Message, state: FSMContext):
             message, state,
             "JSHSHIR aynan 14 ta raqamdan iborat bo'lishi kerak. Qaytadan kiriting."
         )
+        await _delete_incoming(message)  # their invalid attempt — still sensitive-shaped input
         return  # stay in the same state — let them retry without re-sharing contact
 
     # The "enter your JSHSHIR" (or retry) prompt is now answered — clear it
     # before sending the final result (which is itself ephemeral too, see
     # _send_ephemeral — worth seeing immediately, not worth keeping forever).
     await _clear_prompt(message, state)
+    await _delete_incoming(message)  # their typed JSHSHIR — sensitive, gone now that it's verified
     stored = await state.get_data()
     phone = stored.get("phone", "")
     username = stored.get("username", "")
