@@ -243,28 +243,37 @@ EPHEMERAL_RESULT_DELAY = 15  # seconds a final linking result stays visible
 _background_tasks: set[asyncio.Task] = set()
 
 
-async def _send_ephemeral(msg: Message, text: str, *, reply_markup=None,
-                          delay: float = EPHEMERAL_RESULT_DELAY) -> None:
+async def _expire_later(msg: Message, delay: float = EPHEMERAL_RESULT_DELAY) -> None:
     """
-    For a final result (linking succeeded/failed) — worth seeing right
-    away, not worth leaving in the chat forever. Deletes itself in the
-    background after `delay` seconds; a reply keyboard passed via
-    `reply_markup` (e.g. MENU_KB) stays on screen even after the message
-    that introduced it is gone — Telegram keyboards are a chat-level UI
-    element, independent of any one message.
+    Schedule `msg` for deletion `delay` seconds from now, in the
+    background — for a "final result" worth seeing right away but not
+    worth leaving in the chat forever. Used directly for a message that
+    was EDITED in place (see history_pick_month) rather than freshly
+    sent; _send_ephemeral below is the send-then-expire shortcut for the
+    common case.
     """
-    sent = await msg.answer(text, reply_markup=reply_markup)
-
     async def _delete_later():
         await asyncio.sleep(delay)
         try:
-            await sent.delete()
+            await msg.delete()
         except Exception:
             pass
 
     task = asyncio.create_task(_delete_later())
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+
+
+async def _send_ephemeral(msg: Message, text: str, *, reply_markup=None,
+                          delay: float = EPHEMERAL_RESULT_DELAY) -> None:
+    """
+    Send `text` and schedule it for self-deletion (see _expire_later). A
+    reply keyboard passed via `reply_markup` (e.g. MENU_KB) stays on
+    screen even after the message that introduced it is gone — Telegram
+    keyboards are a chat-level UI element, independent of any one message.
+    """
+    sent = await msg.answer(text, reply_markup=reply_markup)
+    await _expire_later(sent, delay)
 
 
 # --- /start ------------------------------------------------------------ #
@@ -449,8 +458,8 @@ async def on_jshshir(message: Message, state: FSMContext):
 async def _require_linked(message: Message) -> bool:
     emp = await data.get_employee(message.from_user.id)
     if emp is None:
-        await message.answer(
-            "Avval telefon raqamingizni tasdiqlang.", reply_markup=CONTACT_KB
+        await _send_ephemeral(
+            message, "Avval telefon raqamingizni tasdiqlang.", reply_markup=CONTACT_KB
         )
         return False
     return True
@@ -464,7 +473,7 @@ async def current_salary(message: Message):
         return
     salaries = await data.get_current_salary(message.from_user.id)
     if not salaries:
-        await message.answer("Hozircha oylik ma'lumoti mavjud emas.", reply_markup=MENU_KB)
+        await _send_ephemeral(message, "Hozircha oylik ma'lumoti mavjud emas.", reply_markup=MENU_KB)
         return
     # Each branch's salary is its own normal, independent message — no
     # combining, no total. If two branches paid the same month, that's
@@ -472,7 +481,7 @@ async def current_salary(message: Message):
     # on the last one, re-showing it in case it was ever dismissed.
     for i, s in enumerate(salaries):
         last = i == len(salaries) - 1
-        await message.answer(_one_salary_text(s), reply_markup=MENU_KB if last else None)
+        await _send_ephemeral(message, _one_salary_text(s), reply_markup=MENU_KB if last else None)
 
 
 @dp.message(F.text == "📊 Oyliklar tarixi")
@@ -483,10 +492,15 @@ async def salary_history(message: Message):
         return
     years = await data.list_salary_years(message.from_user.id)
     if not years:
-        await message.answer("Oyliklar tarixi bo'sh.", reply_markup=MENU_KB)
+        await _send_ephemeral(message, "Oyliklar tarixi bo'sh.", reply_markup=MENU_KB)
         return
     # An inline keyboard (year buttons) here is independent of the persistent
-    # reply-keyboard menu, so this doesn't remove/replace the menu.
+    # reply-keyboard menu, so this doesn't remove/replace the menu. NOT
+    # ephemeral, unlike the rest of this flow: this message gets EDITED in
+    # place as the user navigates year -> month (see history_pick_year/
+    # history_back_to_years below), so auto-deleting it would break that
+    # navigation for anyone slower than EPHEMERAL_RESULT_DELAY. Only the
+    # final picked month's result (history_pick_month) expires.
     await message.answer("📊 Qaysi yilni ko'rmoqchisiz?", reply_markup=_years_keyboard(years))
 
 
@@ -530,13 +544,18 @@ async def history_pick_month(callback: CallbackQuery):
     # Same rule here: no combining, no total. First branch's figure replaces
     # the "pick a month" prompt; any additional branch for that same month
     # (rare) follows as its own separate, normal message. The back button
-    # rides along on whichever message is last.
+    # rides along on whichever message is last. This IS the final result of
+    # the picker, so — unlike the year/month prompts before it — every
+    # message here expires after EPHEMERAL_RESULT_DELAY.
     last = len(salaries) - 1
     await callback.message.edit_text(
         _one_salary_text(salaries[0]), reply_markup=back_kb if last == 0 else None
     )
+    await _expire_later(callback.message)
     for i, s in enumerate(salaries[1:], start=1):
-        await callback.message.answer(_one_salary_text(s), reply_markup=back_kb if i == last else None)
+        await _send_ephemeral(
+            callback.message, _one_salary_text(s), reply_markup=back_kb if i == last else None
+        )
     await callback.answer()
 
 
@@ -546,9 +565,10 @@ async def profile(message: Message):
     await _delete_incoming(message)  # the menu button press itself
     emp = await data.get_employee(message.from_user.id)
     if emp is None:
-        await message.answer("Avval telefon raqamingizni tasdiqlang.", reply_markup=CONTACT_KB)
+        await _send_ephemeral(message, "Avval telefon raqamingizni tasdiqlang.", reply_markup=CONTACT_KB)
         return
-    await message.answer(
+    await _send_ephemeral(
+        message,
         f"👤 Profil\n\nF.I.Sh: {emp['full_name']}\n"
         f"Kod: {emp['employee_code']}\nBo'lim: {emp['unit']}",
         reply_markup=MENU_KB,
@@ -559,7 +579,8 @@ async def profile(message: Message):
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
     await _delete_incoming(message)  # the menu button press itself
-    await message.answer(
+    await _send_ephemeral(
+        message,
         "❓ Yordam\n\n"
         "💰 Joriy oylik — eng so'nggi oylik\n"
         "📊 Oyliklar tarixi — oldingi oyliklar\n"
