@@ -74,6 +74,17 @@ CANONICAL_FIELDS = [
     "pension_contribution",
     "union_dues",
     "social_tax",
+    "base_rate",
+    "base_rate_payment",
+    "paid_services",
+    "internal_combination_payment",
+    "position_combination_payment",
+    "mentorship_bonus",
+    "honored_railway_worker_bonus",
+    "hourly_workers_bonus",
+    "gph_contract_payment",
+    "meal_compensation",
+    "mortgage_deduction",
     "net_salary",
 ]
 
@@ -104,6 +115,45 @@ DEFAULT_HEADER_CANDIDATES: dict[str, list[str]] = {
     # still recognized here so it lands in its own column instead of
     # `components`, purely for company-cost reporting.
     "social_tax": ["social_tax", "социальный налог"],
+    # The remaining eleven — see apps.salaries.models.BREAKDOWN_FIELDS for
+    # why each of these is trusted to be stable (confirmed identical header
+    # text across every real export compared, minus one hand-made test
+    # file that never counted as evidence either way).
+    "base_rate": ["base_rate", "оклад"],
+    "base_rate_payment": ["base_rate_payment", "используется с 01.10.2024 оплата по окладу"],
+    "paid_services": ["paid_services", "платные услуги фикс"],
+    "internal_combination_payment": [
+        "internal_combination_payment",
+        "оплата за совместительство внутри предприятия (ст.371/1) фикс",
+    ],
+    "position_combination_payment": [
+        "position_combination_payment",
+        "доплата за совмещение должностей, исполнение обязанностей",
+    ],
+    # The source header itself is truncated with a trailing "(" in every
+    # file it appears in — not our mistake, that's genuinely how 1C exports
+    # it (the parenthetical statute reference after it just never renders).
+    "mentorship_bonus": [
+        "mentorship_bonus",
+        "доплата квалифицированным работникам экономистам,бухгалтерам,инженерам по труду, за наставничество (",
+    ],
+    "honored_railway_worker_bonus": [
+        "honored_railway_worker_bonus",
+        'персональная надбавка работающим работникам за звание "почетный железнодорожник" (ст.371/1)',
+    ],
+    "hourly_workers_bonus": [
+        "hourly_workers_bonus",
+        "премия повременщикам - рабочим (месячная) (ст.372/2)",
+    ],
+    "gph_contract_payment": ["gph_contract_payment", "оплата по договору гпх"],
+    "meal_compensation": [
+        "meal_compensation",
+        "используется с 01.10.2024 оплата за питание или возмещение стоимости питания (ст.373/13)",
+    ],
+    "mortgage_deduction": [
+        "mortgage_deduction",
+        "удержание суммы направленной на погашение кредита (ипотека, без льготный)",
+    ],
     # "Выплачено" (paid out) and "Сальдо на конец" (balance) are mutually
     # exclusive in the exports we've seen — each employee row fills exactly
     # one, never both — so both are tried and whichever one has a value on
@@ -123,6 +173,10 @@ REQUIRED_ALL = ["net_salary"]
 MONEY_FIELDS = [
     "gross_salary", "advance", "deductions",
     "income_tax", "pension_contribution", "union_dues", "social_tax",
+    "base_rate", "base_rate_payment", "paid_services",
+    "internal_combination_payment", "position_combination_payment",
+    "mentorship_bonus", "honored_railway_worker_bonus", "hourly_workers_bonus",
+    "gph_contract_payment", "meal_compensation", "mortgage_deduction",
     "net_salary",
 ]
 

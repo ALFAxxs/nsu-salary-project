@@ -47,6 +47,7 @@ from django.conf import settings  # noqa: E402
 
 from apps.common.jshshir import is_valid_jshshir, normalize_jshshir  # noqa: E402
 from apps.common.money import format_money as _fmt  # noqa: E402
+from apps.salaries.models import BREAKDOWN_FIELDS  # noqa: E402
 from apps.telegram_bot import data  # noqa: E402
 
 logger = logging.getLogger("apps.telegram_bot")
@@ -473,25 +474,30 @@ def _one_salary_text(s: dict) -> str:
     labeled in the source file — whatever a branch's payroll export
     contains for an employee is theirs to see in full.
     """
+    # BREAKDOWN_FIELDS entries, split by category and shown only when
+    # nonzero — same reasoning as apps.notifications.services.
+    # format_salary_message. "employer_only" (social_tax) never shown:
+    # it's the employer's own cost, not withheld from or paid to this
+    # employee.
+    accrual_lines = "".join(
+        f"   • {label}: {_fmt(s.get(name))} so'm\n"
+        for name, label, category in BREAKDOWN_FIELDS
+        if category == "accrual" and s.get(name)
+    )
+    deduction_lines = "".join(
+        f"   • {label}: {_fmt(s.get(name))} so'm\n"
+        for name, label, category in BREAKDOWN_FIELDS
+        if category == "deduction" and s.get(name)
+    )
     text = (
         f"📅 {s['period_label']} — {s['unit']}\n\n"
         f"💰 Hisoblangan: {_fmt(s['gross'])} so'm\n"
+        f"{accrual_lines}"
         f"💳 Avans: {_fmt(s['advance'])} so'm\n"
         f"➖ Ushlanmalar: {_fmt(s['deductions'])} so'm\n"
+        f"{deduction_lines}"
+        f"\n✅ Qo'lga: {_fmt(s['net'])} so'm"
     )
-    # Breakdown of "Ushlanmalar" — only shown when present, same reasoning
-    # as apps.notifications.services.format_salary_message. Social tax
-    # excluded on purpose: employer-side cost, not withheld from this
-    # employee's own pay.
-    for label, key in (
-        ("   • NDFL (daromad solig'i)", "income_tax"),
-        ("   • INPS (pensiya jamg'armasi)", "pension_contribution"),
-        ("   • Profsoyuz badali", "union_dues"),
-    ):
-        value = s.get(key)
-        if value:
-            text += f"{label}: {_fmt(value)} so'm\n"
-    text += f"\n✅ Qo'lga: {_fmt(s['net'])} so'm"
     components = s.get("components") or []
     if components:
         lines = ["\n\n📋 Qo'shimcha ma'lumotlar:"]

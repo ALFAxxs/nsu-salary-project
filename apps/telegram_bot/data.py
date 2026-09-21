@@ -14,7 +14,7 @@ from asgiref.sync import sync_to_async
 
 from apps.employees.models import BotConsent, Employee
 from apps.employees.services import EmployeeRegistrationService
-from apps.salaries.models import Salary
+from apps.salaries.models import BREAKDOWN_FIELDS, Salary
 
 
 @sync_to_async
@@ -121,7 +121,7 @@ def get_salary_detail(telegram_id: int, year: int, month: int) -> list[dict]:
 
 
 def _salary_dict(s: Salary) -> dict:
-    return {
+    d = {
         "period_year": s.period_year,
         "period_month": s.period_month,
         "period_label": s.period_label,
@@ -129,9 +129,10 @@ def _salary_dict(s: Salary) -> dict:
         "gross": s.gross_salary,
         "advance": s.advance,
         "deductions": s.deductions,
-        "income_tax": s.income_tax,
-        "pension_contribution": s.pension_contribution,
-        "union_dues": s.union_dues,
         "net": s.net_salary,
         "components": s.components or [],
     }
+    # Every apps.salaries.models.BREAKDOWN_FIELDS entry, keyed by its own
+    # field name — bot.py's _one_salary_text reads these generically.
+    d.update({name: getattr(s, name) for name, _, _ in BREAKDOWN_FIELDS})
+    return d

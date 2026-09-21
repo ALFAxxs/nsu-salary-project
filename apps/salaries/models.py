@@ -24,12 +24,12 @@ Design decisions:
     Instead we keep the old row as a revision (is_current=False) and create
     a new current row. This preserves an audit trail of corrections (spec
     §10 "import revision/history").
-  * Extra components (the 50+ bonus/allowance/overtime line items a real 1C
-    payroll export can carry, whose exact set and wording genuinely differs
-    file to file — see apps.imports.validators) live in a JSON `components`
-    field, so the model extends without migrations for those. The handful of
-    figures proven stable across every branch's export (gross/advance/
-    deductions/net, income_tax, pension_contribution, union_dues, social_tax)
+  * Extra components (the 30+ remaining bonus/allowance/overtime line items
+    a real 1C payroll export can carry, whose exact set and wording
+    genuinely differs file to file — see apps.imports.validators) live in a
+    JSON `components` field, so the model extends without migrations for
+    those. The figures proven stable across every branch's export
+    (gross/advance/deductions/net plus the 15 in BREAKDOWN_FIELDS above)
     are first-class columns instead, for reliable reporting (spec §11).
 """
 from __future__ import annotations
@@ -38,6 +38,45 @@ from decimal import Decimal
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+# Every "breakdown" money field beyond the four original core figures
+# (gross_salary/advance/deductions/net_salary) — each proven present, under
+# IDENTICAL header text, across every genuine payroll export compared so far
+# (9 real files across 8 branches; see apps/imports/validators.py
+# DEFAULT_HEADER_CANDIDATES for the exact Excel header each maps to). This
+# is the single source of truth other code reads from instead of hand-listing
+# fields in multiple places — apps.imports.services (import + revision
+# comparison), apps.notifications.services / apps.telegram_bot.bot (what the
+# employee sees), and apps.reports.services (branch totals) all iterate this
+# list, so adding a newly-proven-stable field here is enough to wire it
+# everywhere at once.
+#
+# category:
+#   "deduction"      — withheld from the employee's own pay (shown under
+#                       "Ushlanmalar" in the employee message)
+#   "accrual"         — added to what the employee is owed (shown near
+#                       "Hisoblangan ish haqi")
+#   "employer_only"   — a cost to the employer, never withheld from or paid
+#                       to the employee — never shown in the employee message
+#
+# (field name, Uzbek label, category)
+BREAKDOWN_FIELDS: list[tuple[str, str, str]] = [
+    ("income_tax", "NDFL (daromad solig'i)", "deduction"),
+    ("pension_contribution", "INPS (pensiya jamg'armasi)", "deduction"),
+    ("union_dues", "Profsoyuz badali", "deduction"),
+    ("mortgage_deduction", "Ipoteka krediti ushlanmasi", "deduction"),
+    ("social_tax", "Ijtimoiy soliq (ish beruvchi xarajati)", "employer_only"),
+    ("base_rate", "Oklad (stavka)", "accrual"),
+    ("base_rate_payment", "Oklad bo'yicha hisoblangan to'lov", "accrual"),
+    ("paid_services", "Pullik xizmatlar", "accrual"),
+    ("internal_combination_payment", "Ichki sovmestitelstvo to'lovi", "accrual"),
+    ("position_combination_payment", "Lavozimlarni qo'shib olib borish ustamasi", "accrual"),
+    ("mentorship_bonus", "Nastavniklik (murabbiylik) ustamasi", "accrual"),
+    ("honored_railway_worker_bonus", "\"Faxriy temiryo'lchi\" unvoni ustamasi", "accrual"),
+    ("hourly_workers_bonus", "Vaqtbay ishchilar oylik mukofoti", "accrual"),
+    ("gph_contract_payment", "GPX shartnomasi bo'yicha to'lov", "accrual"),
+    ("meal_compensation", "Ovqatlanish uchun to'lov/kompensatsiya", "accrual"),
+]
 
 
 class Salary(models.Model):
@@ -82,13 +121,12 @@ class Salary(models.Model):
     deductions = models.DecimalField(
         _("deductions"), max_digits=14, decimal_places=2, default=Decimal("0")
     )
-    # Breakdown of `deductions` — unlike the 50+ bonus/allowance line items
-    # (which vary too much file-to-file to ever be stable columns, see
-    # Salary.components below), these four appear under this exact same
-    # header text in every real payroll export we've compared (10 files,
-    # 8 branches): НДФЛ, ИНПС, "Удержание членских профсоюзных взносов",
-    # Социальный налог. Optional (default 0) since older imports and any
-    # future file missing one of these columns still validate fine.
+    # Breakdown of `deductions`/`gross_salary` — see BREAKDOWN_FIELDS above
+    # for the full list (15 fields) and why each is trusted to be stable
+    # unlike the remaining 30+ bonus/allowance line items that still vary
+    # too much file-to-file (Salary.components below). Optional (default 0)
+    # since older imports and any future file missing one of these columns
+    # still validate fine.
     income_tax = models.DecimalField(
         _("income tax (NDFL)"), max_digits=14, decimal_places=2, default=Decimal("0")
     )
@@ -103,6 +141,43 @@ class Salary(models.Model):
     # and deliberately left out of the employee-facing message.
     social_tax = models.DecimalField(
         _("social tax"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    # The remaining eleven BREAKDOWN_FIELDS entries — see that list above
+    # for what each maps to in the source Excel and why each is trusted to
+    # be a stable column rather than a apps.imports.validators.MONEY_FIELDS
+    # -> Salary.components catch-all.
+    base_rate = models.DecimalField(
+        _("base rate (oklad)"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    base_rate_payment = models.DecimalField(
+        _("base rate payment"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    paid_services = models.DecimalField(
+        _("paid services"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    internal_combination_payment = models.DecimalField(
+        _("internal combination payment"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    position_combination_payment = models.DecimalField(
+        _("position combination payment"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    mentorship_bonus = models.DecimalField(
+        _("mentorship bonus"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    honored_railway_worker_bonus = models.DecimalField(
+        _("honored railway worker bonus"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    hourly_workers_bonus = models.DecimalField(
+        _("hourly workers bonus"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    gph_contract_payment = models.DecimalField(
+        _("GPH contract payment"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    meal_compensation = models.DecimalField(
+        _("meal compensation"), max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    mortgage_deduction = models.DecimalField(
+        _("mortgage deduction"), max_digits=14, decimal_places=2, default=Decimal("0")
     )
     net_salary = models.DecimalField(
         _("net salary"), max_digits=14, decimal_places=2, default=Decimal("0")

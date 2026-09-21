@@ -27,7 +27,7 @@ from apps.imports.validators import (
     DEFAULT_HEADERS,
     ExcelValidationService,
 )
-from apps.salaries.models import Salary
+from apps.salaries.models import BREAKDOWN_FIELDS, Salary
 
 
 class SalaryImportService:
@@ -109,11 +109,8 @@ class SalaryImportService:
                 gross=norm.get("gross_salary", "0"),
                 advance=norm.get("advance", "0"),
                 deductions=norm.get("deductions", "0"),
-                income_tax=norm.get("income_tax", "0"),
-                pension_contribution=norm.get("pension_contribution", "0"),
-                union_dues=norm.get("union_dues", "0"),
-                social_tax=norm.get("social_tax", "0"),
                 net=norm.get("net_salary", "0"),
+                extra={name: norm.get(name, "0") for name, _, _ in BREAKDOWN_FIELDS},
                 components=row.get("components", []),
                 payroll_jshshir=norm.get("jshshir", ""),
                 payroll_employee_code=norm.get("employee_code", ""),
@@ -138,13 +135,20 @@ class SalaryImportService:
 
     @staticmethod
     def _upsert_salary(*, salary_import, employee_id, gross, advance, deductions, net,
-                       income_tax="0", pension_contribution="0", union_dues="0", social_tax="0",
-                       components=None, payroll_jshshir="", payroll_employee_code=""):
+                       extra=None, components=None, payroll_jshshir="", payroll_employee_code=""):
+        """
+        `extra` is {field_name: raw_value} for every apps.salaries.models.
+        BREAKDOWN_FIELDS entry (income_tax, base_rate, ...) — kept generic
+        (rather than one named kwarg per field) so a newly-proven-stable
+        field only needs adding to BREAKDOWN_FIELDS, not to this signature.
+        """
         from decimal import Decimal
 
         year, month = salary_import.period_year, salary_import.period_month
         unit = salary_import.organization_unit
         code = payroll_employee_code or ""
+        extra = extra or {}
+        extra_d = {name: Decimal(str(extra.get(name, "0"))) for name, _, _ in BREAKDOWN_FIELDS}
         # Scoped by branch AND by this row's own employee_code too: an
         # employee can have more than one current salary for the same
         # branch+month if the payroll file itself lists them more than once
@@ -165,19 +169,12 @@ class SalaryImportService:
         )
         gross_d, advance_d = Decimal(str(gross)), Decimal(str(advance))
         deductions_d, net_d = Decimal(str(deductions)), Decimal(str(net))
-        income_tax_d = Decimal(str(income_tax))
-        pension_d = Decimal(str(pension_contribution))
-        union_dues_d = Decimal(str(union_dues))
-        social_tax_d = Decimal(str(social_tax))
         if existing is not None and (
             existing.gross_salary == gross_d
             and existing.advance == advance_d
             and existing.deductions == deductions_d
-            and existing.income_tax == income_tax_d
-            and existing.pension_contribution == pension_d
-            and existing.union_dues == union_dues_d
-            and existing.social_tax == social_tax_d
             and existing.net_salary == net_d
+            and all(getattr(existing, name) == extra_d[name] for name, _, _ in BREAKDOWN_FIELDS)
             and existing.payroll_jshshir == (payroll_jshshir or "")
             and existing.components == (components or [])
         ):
@@ -201,16 +198,13 @@ class SalaryImportService:
             gross_salary=gross_d,
             advance=advance_d,
             deductions=deductions_d,
-            income_tax=income_tax_d,
-            pension_contribution=pension_d,
-            union_dues=union_dues_d,
-            social_tax=social_tax_d,
             net_salary=net_d,
             components=components or [],
             payroll_jshshir=payroll_jshshir or "",
             payroll_employee_code=code,
             source_import=salary_import,
             is_current=True,
+            **extra_d,
             revision=next_revision,
         )
 
@@ -229,8 +223,13 @@ class SalaryImportService:
         ws.title = "Salary"
         ws.append(headers)
         # Example row (order matches CANONICAL_FIELDS).
-        ws.append(["EMP-001", "998901234567", "30101234567890", "Aliyev Ali",
-                   8000000, 2000000, 100000, 700000, 50000, 50000, 800000, 5900000])
+        ws.append([
+            "EMP-001", "998901234567", "30101234567890", "Aliyev Ali",
+            8000000, 2000000, 100000,          # gross, advance, deductions
+            700000, 50000, 50000, 800000,      # income_tax, pension_contribution, union_dues, social_tax
+            8000000, 8000000, 0, 0, 0, 0, 0, 0, 0, 0, 0,  # base_rate..mortgage_deduction (11 fields, BREAKDOWN_FIELDS tail)
+            5900000,                            # net_salary
+        ])
         buf = io.BytesIO()
         wb.save(buf)
         return buf.getvalue()

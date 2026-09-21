@@ -14,8 +14,19 @@ from apps.employees.models import Employee
 from apps.imports.models import SalaryImport
 from apps.notifications.models import MessageStatus, TelegramMessage
 from apps.organizations.models import OrganizationUnit
-from apps.salaries.models import Salary
+from apps.salaries.models import BREAKDOWN_FIELDS, Salary
 from apps.salaries.selectors import current_salaries_for
+
+
+def _breakdown_list(row: dict, category: str) -> list[dict]:
+    """[{"label": ..., "value": ...}, ...] for one BREAKDOWN_FIELDS category
+    — lets the report template iterate without needing dynamic attribute
+    access (Django templates can't do getattr(obj, variable_name))."""
+    return [
+        {"label": label, "value": row[name]}
+        for name, label, cat in BREAKDOWN_FIELDS
+        if cat == category
+    ]
 
 
 class ReportService:
@@ -146,46 +157,33 @@ class ReportService:
             organization_unit_id__in=unit_ids, is_current=True,
             period_year=year, period_month=month,
         )
+        annotate_kwargs = {
+            "employees": Count("employee", distinct=True),
+            "gross": Sum("gross_salary"),
+            "advance": Sum("advance"),
+            "deductions": Sum("deductions"),
+            "net": Sum("net_salary"),
+        }
+        annotate_kwargs.update({name: Sum(name) for name, _, _ in BREAKDOWN_FIELDS})
         stats = {
             row["organization_unit_id"]: row
-            for row in sal_qs.values("organization_unit_id").annotate(
-                employees=Count("employee", distinct=True),
-                gross=Sum("gross_salary"),
-                advance=Sum("advance"),
-                deductions=Sum("deductions"),
-                income_tax=Sum("income_tax"),
-                pension_contribution=Sum("pension_contribution"),
-                union_dues=Sum("union_dues"),
-                social_tax=Sum("social_tax"),
-                net=Sum("net_salary"),
-            )
+            for row in sal_qs.values("organization_unit_id").annotate(**annotate_kwargs)
         }
+
+        money_keys = ["employees", "gross", "advance", "deductions", "net"] + [
+            name for name, _, _ in BREAKDOWN_FIELDS
+        ]
 
         rows = []
         for unit in units:
             s = stats.get(unit.id, {})
-            rows.append({
-                "unit": unit,
-                "employees": s.get("employees") or 0,
-                "gross": s.get("gross") or 0,
-                "advance": s.get("advance") or 0,
-                "deductions": s.get("deductions") or 0,
-                "income_tax": s.get("income_tax") or 0,
-                "pension_contribution": s.get("pension_contribution") or 0,
-                "union_dues": s.get("union_dues") or 0,
-                "social_tax": s.get("social_tax") or 0,
-                "net": s.get("net") or 0,
-            })
+            row = {"unit": unit, **{k: s.get(k) or 0 for k in money_keys}}
+            row["accrual_breakdown"] = _breakdown_list(row, "accrual")
+            row["deduction_breakdown"] = _breakdown_list(row, "deduction")
+            rows.append(row)
 
-        totals = {
-            "employees": sum(r["employees"] for r in rows),
-            "gross": sum(r["gross"] for r in rows),
-            "advance": sum(r["advance"] for r in rows),
-            "deductions": sum(r["deductions"] for r in rows),
-            "income_tax": sum(r["income_tax"] for r in rows),
-            "pension_contribution": sum(r["pension_contribution"] for r in rows),
-            "union_dues": sum(r["union_dues"] for r in rows),
-            "social_tax": sum(r["social_tax"] for r in rows),
-            "net": sum(r["net"] for r in rows),
-        }
+        totals = {k: sum(r[k] for r in rows) for k in money_keys}
+        totals["accrual_breakdown"] = _breakdown_list(totals, "accrual")
+        totals["deduction_breakdown"] = _breakdown_list(totals, "deduction")
+
         return {"rows": rows, "totals": totals}

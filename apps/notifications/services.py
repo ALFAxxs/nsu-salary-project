@@ -24,7 +24,7 @@ from apps.notifications.models import (
     MessageStatus,
     TelegramMessage,
 )
-from apps.salaries.models import Salary
+from apps.salaries.models import BREAKDOWN_FIELDS, Salary
 
 
 def _eligible_status(salary: Salary, employee) -> str:
@@ -56,33 +56,39 @@ def format_salary_message(salary: Salary) -> str:
     messages like this one, each clearly naming its own branch — so they
     can tell the two incomes apart.
 
-    Everything else the source Excel carried for this row (bonuses,
-    allowances, itemized deductions, ...) is appended below, labeled
-    exactly as in the file — see Salary.components / ExcelValidationService.
+    The stable breakdown fields (apps.salaries.models.BREAKDOWN_FIELDS) get
+    their own clean labeled lines, split into accruals and deductions.
+    Everything else the source Excel carried for this row (the 30+ bonus/
+    allowance line items whose wording varies file to file) is appended
+    below as-is — see Salary.components / ExcelValidationService.
     """
     e = salary.employee
+    # BREAKDOWN_FIELDS entries are shown only when nonzero (a 0 would
+    # misleadingly read as "you have none of this"), split by category:
+    # "accrual" near the gross figure, "deduction" under "Ushlanmalar".
+    # "employer_only" (social_tax) is never shown — it's the employer's own
+    # cost, not withheld from or paid to this employee.
+    accrual_lines = "".join(
+        f"   • {label}: {_fmt_money(getattr(salary, name))} so'm\n"
+        for name, label, category in BREAKDOWN_FIELDS
+        if category == "accrual" and getattr(salary, name)
+    )
+    deduction_lines = "".join(
+        f"   • {label}: {_fmt_money(getattr(salary, name))} so'm\n"
+        for name, label, category in BREAKDOWN_FIELDS
+        if category == "deduction" and getattr(salary, name)
+    )
     text = (
         f"Assalomu alaykum, {e.full_name}!\n\n"
         f"🏢 Tashkilot: {salary.organization_unit.name}\n"
         f"📅 Hisoblangan davr: {salary.period_label}\n\n"
         f"💰 Hisoblangan ish haqi: {_fmt_money(salary.gross_salary)} so'm\n"
+        f"{accrual_lines}"
         f"💳 Avans: {_fmt_money(salary.advance)} so'm\n"
         f"➖ Ushlanmalar: {_fmt_money(salary.deductions)} so'm\n"
+        f"{deduction_lines}"
+        f"\n✅ Plastik kartaga tushadigan summa: {_fmt_money(salary.net_salary)} so'm"
     )
-    # Breakdown of "Ushlanmalar" — shown only when the source file actually
-    # carried these columns (kept out of the message otherwise, since 0 would
-    # misleadingly read as "nothing was withheld"). Social tax deliberately
-    # excluded — it's an employer-side cost, never withheld from this
-    # employee's own pay (see Salary.social_tax).
-    breakdown = [
-        ("   • NDFL (daromad solig'i)", salary.income_tax),
-        ("   • INPS (pensiya jamg'armasi)", salary.pension_contribution),
-        ("   • Profsoyuz badali", salary.union_dues),
-    ]
-    for label, value in breakdown:
-        if value:
-            text += f"{label}: {_fmt_money(value)} so'm\n"
-    text += f"\n✅ Plastik kartaga tushadigan summa: {_fmt_money(salary.net_salary)} so'm"
     components = salary.components or []
     if components:
         lines = ["\n\n📋 Qo'shimcha ma'lumotlar:"]
