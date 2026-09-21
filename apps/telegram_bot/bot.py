@@ -217,6 +217,14 @@ async def _clear_prompt(msg: Message, state: FSMContext) -> None:
 
 EPHEMERAL_RESULT_DELAY = 15  # seconds a final linking result stays visible
 
+# asyncio.create_task() only holds a WEAK reference to the task it returns —
+# without also keeping a strong reference somewhere, the event loop is free
+# to garbage-collect it mid-sleep, silently dropping the scheduled delete
+# before it ever fires (a well-known asyncio pitfall; see the "Important"
+# note under asyncio.create_task in the Python docs). This set is that
+# strong reference; each task removes itself once done.
+_background_tasks: set[asyncio.Task] = set()
+
 
 async def _send_ephemeral(msg: Message, text: str, *, reply_markup=None,
                           delay: float = EPHEMERAL_RESULT_DELAY) -> None:
@@ -237,7 +245,9 @@ async def _send_ephemeral(msg: Message, text: str, *, reply_markup=None,
         except Exception:
             pass
 
-    asyncio.create_task(_delete_later())
+    task = asyncio.create_task(_delete_later())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 # --- /start ------------------------------------------------------------ #
