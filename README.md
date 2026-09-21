@@ -76,7 +76,51 @@ unknown employee, **another branch's employee**, non-numeric/negative salary,
 formula cells. Errors are downloadable as an Excel report; a template is
 downloadable too.
 
-## 5. Notifications (spec §29, §30, §42)
+## 5. Bulk data-loading commands (terminal, not the web Excel upload)
+
+One-time/ongoing HR setup — loading branches and the employee registry in
+bulk. Run from the terminal (`python manage.py <command> file.xlsx`), not the
+web UI's monthly payroll upload. Safe to re-run: a matched row is updated in
+place, an unmatched one is created, nothing is ever deleted. Add `--dry-run`
+to preview without writing to the database.
+
+### `import_branches` — load/update branches
+
+```bash
+python manage.py import_branches path/to/filiallar.xlsx
+python manage.py import_branches path/to/filiallar.xlsx --dry-run
+```
+
+| Column | Required? | Notes |
+|---|---|---|
+| `Filial_nomi` | **majburiy** | branch name |
+| `type` | ixtiyoriy | `branch` (default) or `head_office` |
+| `is_active` | ixtiyoriy | TRUE/FALSE, blank defaults to TRUE |
+
+### `import_employees` — load/update the HR employee registry
+
+```bash
+python manage.py import_employees path/to/xodimlar.xlsx
+python manage.py import_employees path/to/xodimlar.xlsx --dry-run
+```
+
+| Column | Required? | Notes |
+|---|---|---|
+| `JShShIR` | ikkitadan kamida bittasi (JShShIR yoki Telefon) **majburiy** | 14 digits |
+| `Telefon raqamlari` | ikkitadan kamida bittasi (JShShIR yoki Telefon) **majburiy** | |
+| `To'liq ism` | **majburiy** | full name |
+| `Filial nomi` | **majburiy** | must already exist — run `import_branches` first |
+| `Passport seria va raqami` | ixtiyoriy | |
+| `Tug'ilgan sana` | ixtiyoriy | date |
+| `Jinsi` | ixtiyoriy | "Erkak"/"Ayol" |
+| `Bo'lim` | ixtiyoriy | department |
+| `Lavozim` | ixtiyoriy | position |
+| `Shartnoma turi` | ixtiyoriy | contract type |
+
+Identity match: phone first, then JSHSHIR — same dual-key rule the payroll
+importer uses (`apps/imports/validators.py`).
+
+## 6. Notifications (spec §29, §30, §42)
 
 - Never sent synchronously — Celery fans out one task per message, throttled to
   `TELEGRAM_SEND_RATE_LIMIT`/sec.
@@ -87,7 +131,7 @@ downloadable too.
 - Retry policy: transient errors (429/5xx/network) retried up to
   `TELEGRAM_MAX_ATTEMPTS`; permanent (403 blocked) → `BLOCKED`/`FAILED`.
 
-## 6. Local development
+## 7. Local development
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -111,7 +155,7 @@ Run tests:
 python manage.py test tests
 ```
 
-## 7. Production deployment (Ubuntu + Nginx + Gunicorn)
+## 8. Production deployment (Ubuntu + Nginx + Gunicorn)
 
 ```bash
 # 1. System packages
@@ -143,7 +187,7 @@ sudo systemctl restart nginx
 Four long-running processes: **web** (gunicorn), **worker** (celery),
 **beat** (celery scheduler), **bot** (aiogram). All defined in `deploy/`.
 
-## 8. Project layout
+## 9. Project layout
 
 ```
 config/         settings (base/dev/prod), celery, wsgi/asgi, urls
@@ -163,7 +207,7 @@ deploy/         systemd units + nginx config
 tests/          test suite (branch isolation is mandatory)
 ```
 
-## 9. Extensibility
+## 10. Extensibility
 
 The `Salary.components` JSON field and service-layer design allow adding bonus,
 tax, pension, overtime, PDF payslips, SMS/email channels, attendance, etc.
