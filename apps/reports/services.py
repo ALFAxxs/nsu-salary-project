@@ -21,10 +21,15 @@ from apps.salaries.selectors import current_salaries_for
 def _breakdown_list(row: dict, category: str) -> list[dict]:
     """[{"label": ..., "value": ...}, ...] for one BREAKDOWN_FIELDS category
     — lets the report template iterate without needing dynamic attribute
-    access (Django templates can't do getattr(obj, variable_name))."""
+    access (Django templates can't do getattr(obj, variable_name)).
+
+    Uses ru_label (the exact Excel/1C wording), not the Uzbek label used in
+    the employee-facing bot message — buxgalters read this report next to
+    the source file, so it should match that file's own terminology.
+    """
     return [
-        {"label": label, "value": row[name]}
-        for name, label, cat in BREAKDOWN_FIELDS
+        {"label": ru_label, "value": row[name]}
+        for name, _uz_label, cat, ru_label in BREAKDOWN_FIELDS
         if cat == category
     ]
 
@@ -164,14 +169,14 @@ class ReportService:
             "deductions": Sum("deductions"),
             "net": Sum("net_salary"),
         }
-        annotate_kwargs.update({name: Sum(name) for name, _, _ in BREAKDOWN_FIELDS})
+        annotate_kwargs.update({name: Sum(name) for name, _, _, _ in BREAKDOWN_FIELDS})
         stats = {
             row["organization_unit_id"]: row
             for row in sal_qs.values("organization_unit_id").annotate(**annotate_kwargs)
         }
 
         money_keys = ["employees", "gross", "advance", "deductions", "net"] + [
-            name for name, _, _ in BREAKDOWN_FIELDS
+            name for name, _, _, _ in BREAKDOWN_FIELDS
         ]
 
         rows = []

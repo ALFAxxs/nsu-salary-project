@@ -59,23 +59,41 @@ from django.utils.translation import gettext_lazy as _
 #   "employer_only"   — a cost to the employer, never withheld from or paid
 #                       to the employee — never shown in the employee message
 #
-# (field name, Uzbek label, category)
-BREAKDOWN_FIELDS: list[tuple[str, str, str]] = [
-    ("income_tax", "NDFL (daromad solig'i)", "deduction"),
-    ("pension_contribution", "INPS (pensiya jamg'armasi)", "deduction"),
-    ("union_dues", "Profsoyuz badali", "deduction"),
-    ("mortgage_deduction", "Ipoteka krediti ushlanmasi", "deduction"),
-    ("social_tax", "Ijtimoiy soliq (ish beruvchi xarajati)", "employer_only"),
-    ("base_rate", "Oklad (stavka)", "accrual"),
-    ("base_rate_payment", "Oklad bo'yicha hisoblangan to'lov", "accrual"),
-    ("paid_services", "Pullik xizmatlar", "accrual"),
-    ("internal_combination_payment", "Ichki sovmestitelstvo to'lovi", "accrual"),
-    ("position_combination_payment", "Lavozimlarni qo'shib olib borish ustamasi", "accrual"),
-    ("mentorship_bonus", "Nastavniklik (murabbiylik) ustamasi", "accrual"),
-    ("honored_railway_worker_bonus", "\"Faxriy temiryo'lchi\" unvoni ustamasi", "accrual"),
-    ("hourly_workers_bonus", "Vaqtbay ishchilar oylik mukofoti", "accrual"),
-    ("gph_contract_payment", "GPX shartnomasi bo'yicha to'lov", "accrual"),
-    ("meal_compensation", "Ovqatlanish uchun to'lov/kompensatsiya", "accrual"),
+# ru_label is the exact text as it appears in the source Excel/1C export —
+# used on the admin-facing financial report (apps.reports), which
+# buxgalters read side-by-side with the original file, so it must match
+# that file's own wording rather than an Uzbek translation. uz_label is
+# for the employee-facing bot/Telegram message instead.
+#
+# (field name, Uzbek label, category, Russian/Excel label)
+BREAKDOWN_FIELDS: list[tuple[str, str, str, str]] = [
+    ("income_tax", "NDFL (daromad solig'i)", "deduction", "НДФЛ"),
+    ("pension_contribution", "INPS (pensiya jamg'armasi)", "deduction", "ИНПС"),
+    ("union_dues", "Profsoyuz badali", "deduction",
+     "Удержание членских профсоюзных взносов 1%"),
+    ("mortgage_deduction", "Ipoteka krediti ushlanmasi", "deduction",
+     "Удержание суммы направленной на погашение кредита (ипотека, без льготный)"),
+    ("social_tax", "Ijtimoiy soliq (ish beruvchi xarajati)", "employer_only", "Социальный налог"),
+    ("base_rate", "Oklad (stavka)", "accrual", "Оклад"),
+    ("base_rate_payment", "Oklad bo'yicha hisoblangan to'lov", "accrual",
+     "Используется с 01.10.2024 Оплата по окладу"),
+    ("paid_services", "Pullik xizmatlar", "accrual", "Платные услуги ФИКС"),
+    ("internal_combination_payment", "Ichki sovmestitelstvo to'lovi", "accrual",
+     "Оплата за совместительство внутри предприятия (ст.371/1) ФИКС"),
+    ("position_combination_payment", "Lavozimlarni qo'shib olib borish ustamasi", "accrual",
+     "Доплата за совмещение должностей, исполнение обязанностей"),
+    # Trailing "(" trimmed for display — the *matching* candidate in
+    # apps.imports.validators keeps the exact (truncated) source text,
+    # since that's genuinely how 1C exports it.
+    ("mentorship_bonus", "Nastavniklik (murabbiylik) ustamasi", "accrual",
+     "Доплата квалифицированным работникам экономистам,бухгалтерам,инженерам по труду, за наставничество"),
+    ("honored_railway_worker_bonus", "\"Faxriy temiryo'lchi\" unvoni ustamasi", "accrual",
+     'Персональная надбавка работающим работникам за звание "Почетный железнодорожник" (ст.371/1)'),
+    ("hourly_workers_bonus", "Vaqtbay ishchilar oylik mukofoti", "accrual",
+     "Премия повременщикам - рабочим (месячная) (ст.372/2)"),
+    ("gph_contract_payment", "GPX shartnomasi bo'yicha to'lov", "accrual", "Оплата по договору ГПХ"),
+    ("meal_compensation", "Ovqatlanish uchun to'lov/kompensatsiya", "accrual",
+     "Используется с 01.10.2024 Оплата за питание или возмещение стоимости питания (ст.373/13)"),
 ]
 
 

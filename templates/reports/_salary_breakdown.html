@@ -1,21 +1,21 @@
 {% load report_extras %}
 <ul class="list-group list-group-flush">
   <li class="list-group-item d-flex justify-content-between"><span>Xodimlar</span><strong>{{ r.employees }}</strong></li>
-  <li class="list-group-item d-flex justify-content-between"><span>Yalpi oylik</span><strong>{{ r.gross|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between"><span>Всего начислено</span><strong>{{ r.gross|money }} so'm</strong></li>
   {% for item in r.accrual_breakdown %}
   {% if item.value %}
   <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— {{ item.label }}</span><span>{{ item.value|money }} so'm</span></li>
   {% endif %}
   {% endfor %}
-  <li class="list-group-item d-flex justify-content-between"><span>Avans</span><strong>{{ r.advance|money }} so'm</strong></li>
-  <li class="list-group-item d-flex justify-content-between"><span>Ushlab qolingan (jami)</span><strong>{{ r.deductions|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between"><span>Аванс</span><strong>{{ r.advance|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between"><span>Всего удержано</span><strong>{{ r.deductions|money }} so'm</strong></li>
   {% for item in r.deduction_breakdown %}
   {% if item.value %}
   <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— {{ item.label }}</span><span>{{ item.value|money }} so'm</span></li>
   {% endif %}
   {% endfor %}
   {% if r.social_tax %}
-  <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— Ijtimoiy soliq (ish beruvchi)</span><span>{{ r.social_tax|money }} so'm</span></li>
+  <li class="list-group-item d-flex justify-content-between ps-4 text-muted"><span>— Социальный налог</span><span>{{ r.social_tax|money }} so'm</span></li>
   {% endif %}
-  <li class="list-group-item d-flex justify-content-between bg-light"><span class="fw-semibold">Sof (qo'lga tegadigan)</span><strong>{{ r.net|money }} so'm</strong></li>
+  <li class="list-group-item d-flex justify-content-between bg-light"><span class="fw-semibold">Выплачено</span><strong>{{ r.net|money }} so'm</strong></li>
 </ul>

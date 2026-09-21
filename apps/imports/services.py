@@ -110,7 +110,7 @@ class SalaryImportService:
                 advance=norm.get("advance", "0"),
                 deductions=norm.get("deductions", "0"),
                 net=norm.get("net_salary", "0"),
-                extra={name: norm.get(name, "0") for name, _, _ in BREAKDOWN_FIELDS},
+                extra={name: norm.get(name, "0") for name, _, _, _ in BREAKDOWN_FIELDS},
                 components=row.get("components", []),
                 payroll_jshshir=norm.get("jshshir", ""),
                 payroll_employee_code=norm.get("employee_code", ""),
@@ -148,7 +148,7 @@ class SalaryImportService:
         unit = salary_import.organization_unit
         code = payroll_employee_code or ""
         extra = extra or {}
-        extra_d = {name: Decimal(str(extra.get(name, "0"))) for name, _, _ in BREAKDOWN_FIELDS}
+        extra_d = {name: Decimal(str(extra.get(name, "0"))) for name, _, _, _ in BREAKDOWN_FIELDS}
         # Scoped by branch AND by this row's own employee_code too: an
         # employee can have more than one current salary for the same
         # branch+month if the payroll file itself lists them more than once
@@ -174,7 +174,7 @@ class SalaryImportService:
             and existing.advance == advance_d
             and existing.deductions == deductions_d
             and existing.net_salary == net_d
-            and all(getattr(existing, name) == extra_d[name] for name, _, _ in BREAKDOWN_FIELDS)
+            and all(getattr(existing, name) == extra_d[name] for name, _, _, _ in BREAKDOWN_FIELDS)
             and existing.payroll_jshshir == (payroll_jshshir or "")
             and existing.components == (components or [])
         ):

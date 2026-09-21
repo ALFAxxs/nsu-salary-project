@@ -134,5 +134,5 @@ def _salary_dict(s: Salary) -> dict:
     }
     # Every apps.salaries.models.BREAKDOWN_FIELDS entry, keyed by its own
     # field name — bot.py's _one_salary_text reads these generically.
-    d.update({name: getattr(s, name) for name, _, _ in BREAKDOWN_FIELDS})
+    d.update({name: getattr(s, name) for name, _, _, _ in BREAKDOWN_FIELDS})
     return d

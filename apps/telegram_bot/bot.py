@@ -481,12 +481,12 @@ def _one_salary_text(s: dict) -> str:
     # employee.
     accrual_lines = "".join(
         f"   • {label}: {_fmt(s.get(name))} so'm\n"
-        for name, label, category in BREAKDOWN_FIELDS
+        for name, label, category, _ in BREAKDOWN_FIELDS
         if category == "accrual" and s.get(name)
     )
     deduction_lines = "".join(
         f"   • {label}: {_fmt(s.get(name))} so'm\n"
-        for name, label, category in BREAKDOWN_FIELDS
+        for name, label, category, _ in BREAKDOWN_FIELDS
         if category == "deduction" and s.get(name)
     )
     text = (

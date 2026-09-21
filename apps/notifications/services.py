@@ -70,12 +70,12 @@ def format_salary_message(salary: Salary) -> str:
     # cost, not withheld from or paid to this employee.
     accrual_lines = "".join(
         f"   • {label}: {_fmt_money(getattr(salary, name))} so'm\n"
-        for name, label, category in BREAKDOWN_FIELDS
+        for name, label, category, _ in BREAKDOWN_FIELDS
         if category == "accrual" and getattr(salary, name)
     )
     deduction_lines = "".join(
         f"   • {label}: {_fmt_money(getattr(salary, name))} so'm\n"
-        for name, label, category in BREAKDOWN_FIELDS
+        for name, label, category, _ in BREAKDOWN_FIELDS
         if category == "deduction" and getattr(salary, name)
     )
     text = (
