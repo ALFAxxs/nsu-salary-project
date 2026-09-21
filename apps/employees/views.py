@@ -4,7 +4,7 @@ from __future__ import annotations
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -55,6 +55,17 @@ def employee_list(request):
     elif tg == "unconnected":
         qs = qs.filter(telegram_id__isnull=True)
 
+    # Summary cards reflect THIS filtered view (search/unit/tg already
+    # applied above) — so filtering to one branch shows that branch's own
+    # counts, not the admin's whole scope. One query, computed before
+    # pagination slices the queryset down to one page.
+    stats = qs.aggregate(
+        total=Count("id"),
+        connected=Count("id", filter=Q(telegram_id__isnull=False)),
+        unconnected=Count("id", filter=Q(telegram_id__isnull=True)),
+        inactive=Count("id", filter=Q(is_active=False)),
+    )
+
     paginator = Paginator(qs.order_by("full_name"), 25)
     page = paginator.get_page(request.GET.get("page"))
 
@@ -64,7 +75,7 @@ def employee_list(request):
     )
     return render(request, "employees/list.html", {
         "page": page, "search": search, "units": units,
-        "selected_unit": unit_id, "tg": tg,
+        "selected_unit": unit_id, "tg": tg, "stats": stats,
     })
 
 

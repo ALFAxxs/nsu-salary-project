@@ -6,6 +6,14 @@
 {% if nav_can_manage_employees %}
 <a href="{% url 'employees:create' %}" class="btn btn-primary mb-3"><i class="bi bi-plus"></i> Yangi xodim</a>
 {% endif %}
+
+<div class="stat-grid">
+  <div class="stat-card blue"><div class="label">Jami xodimlar</div><div class="value">{{ stats.total }}</div></div>
+  <div class="stat-card green"><div class="label">Telegram ulangan</div><div class="value">{{ stats.connected }}</div></div>
+  <div class="stat-card yellow"><div class="label">Telegram ulanmagan</div><div class="value">{{ stats.unconnected }}</div></div>
+  <div class="stat-card red"><div class="label">Nofaol</div><div class="value">{{ stats.inactive }}</div></div>
+</div>
+
 <form method="get" class="row g-2 mb-3">
   <div class="col-md-4"><input name="q" value="{{ search }}" class="form-control" placeholder="Ism, kod yoki telefon"></div>
   {% if units.count > 1 %}
