@@ -246,6 +246,41 @@ class AutoSendAfterLinkTests(TestCase):
         other.refresh_from_db()
         self.assertEqual(other.telegram_id, 999)  # they themselves did link fine
 
+    def test_only_the_latest_period_auto_sends_not_the_whole_backlog(self):
+        # HR uploaded several months BEFORE this employee ever linked — all
+        # of them (including self.setUp's August one) sat as
+        # TELEGRAM_NOT_CONNECTED. Linking must not flood the employee with
+        # every old month at once; only the most recent period goes out
+        # automatically, older ones stay held back (still reachable via the
+        # bot's own salary-history command on demand).
+        for month in (6, 7):
+            imp = SalaryImport.objects.create(
+                organization_unit=self.b1, period_year=2026, period_month=month,
+                file_name="x.xlsx",
+                uploaded_by=User.objects.create_user(f"u_bl_{month}", password="x", role=Role.SUPER_ADMIN))
+            Salary.objects.create(
+                employee=self.emp, organization_unit=self.b1, period_year=2026, period_month=month,
+                net_salary=Decimal("5900000"), source_import=imp)
+            SalaryNotificationService.prepare_for_import(imp)
+        held_back = TelegramMessage.objects.filter(employee=self.emp)
+        self.assertEqual(held_back.count(), 3)  # June, July, August (self.setUp)
+
+        token_patch, post_patch = self._send_mocks()
+        with token_patch, post_patch as mock_post:
+            with self.captureOnCommitCallbacks(execute=True):
+                EmployeeRegistrationService.link_telegram(
+                    raw_phone="998901234567", raw_jshshir="30101234567890",
+                    telegram_id=777)
+        self.assertEqual(mock_post.call_count, 1)  # only August (the latest), not all 3
+
+        statuses = {
+            (m.salary.period_year, m.salary.period_month): m.status
+            for m in TelegramMessage.objects.select_related("salary").filter(employee=self.emp)
+        }
+        self.assertEqual(statuses[(2026, 8)], MessageStatus.SENT)
+        self.assertEqual(statuses[(2026, 7)], MessageStatus.TELEGRAM_NOT_CONNECTED)
+        self.assertEqual(statuses[(2026, 6)], MessageStatus.TELEGRAM_NOT_CONNECTED)
+
 
 class BranchIsolationTests(TestCase):
     """The mandatory test: Branch 1 admin cannot see Branch 2 data (spec §51)."""

@@ -171,21 +171,37 @@ class SalaryNotificationService:
         Called right after an employee becomes telegram-linked — via the
         bot's own /start flow, or HR creating/editing an Employee that
         auto-links to a pending TelegramContact (see
-        EmployeeRegistrationService). Any of THEIR already-prepared
-        messages that were only held back for TELEGRAM_NOT_CONNECTED (or
-        JSHSHIR_MISMATCH, in case that also got fixed around the same
-        time) go out immediately instead of waiting for an admin to
-        revisit that import and click "Send" again. Returns how many were
-        dispatched.
+        EmployeeRegistrationService). Only the MOST RECENT period's
+        held-back message(s) go out automatically — if HR had uploaded
+        several months of backlog before this employee ever linked, every
+        one of them would have sat as TELEGRAM_NOT_CONNECTED, and pushing
+        all of them at once would flood a brand-new user with months of
+        old notifications the moment they press /start. Older periods stay
+        exactly as they were (still reachable any time via the bot's own
+        "Oyliklar tarixi", which reads Salary directly and doesn't care
+        about TelegramMessage status, or by an admin explicitly resending
+        that import) — this only decides what gets pushed automatically.
+        A tie (paid by more than one branch in that same latest period)
+        sends all of them, same as before. Returns how many were dispatched.
         """
         from apps.notifications.tasks import send_salary_message
 
-        candidates = TelegramMessage.objects.select_related("salary").filter(
-            employee=employee,
-            status__in=[MessageStatus.TELEGRAM_NOT_CONNECTED, MessageStatus.JSHSHIR_MISMATCH],
+        candidates = list(
+            TelegramMessage.objects.select_related("salary").filter(
+                employee=employee,
+                status__in=[MessageStatus.TELEGRAM_NOT_CONNECTED, MessageStatus.JSHSHIR_MISMATCH],
+            )
         )
+        if not candidates:
+            return 0
+        latest_period = max(
+            (msg.salary.period_year, msg.salary.period_month) for msg in candidates
+        )
+
         dispatched = 0
         for msg in candidates:
+            if (msg.salary.period_year, msg.salary.period_month) != latest_period:
+                continue
             status = _eligible_status(msg.salary, employee)
             if status != MessageStatus.PENDING:
                 continue
