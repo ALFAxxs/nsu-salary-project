@@ -114,10 +114,10 @@ class EmployeeRegistrationService:
         employee.save(update_fields=[
             "telegram_id", "telegram_username", "telegram_linked_at", "updated_at",
         ])
-        # A salary notification may already be sitting there waiting only
-        # for this — send it now instead of making an admin re-click Send.
-        from apps.notifications.services import SalaryNotificationService
-        SalaryNotificationService.recheck_after_link(employee)
+        # Deliberately no auto-send here: a salary message held back only
+        # for TELEGRAM_NOT_CONNECTED stays that way even after linking — the
+        # employee checks it themselves via /salary, or an admin explicitly
+        # re-clicks Send on that import.
         return LinkOutcome(LinkResult.LINKED, employee)
 
     @staticmethod
@@ -217,9 +217,5 @@ class EmployeeRegistrationService:
         employee.save(update_fields=[
             "telegram_id", "telegram_username", "telegram_linked_at", "updated_at",
         ])
-        # Same as the bot's own /start path: don't make HR separately visit
-        # Notifications and click Send for a message that was only ever
-        # blocked by this employee not being connected yet.
-        from apps.notifications.services import SalaryNotificationService
-        SalaryNotificationService.recheck_after_link(employee)
+        # Same as the bot's own /start path: no auto-send — see link_telegram.
         return True

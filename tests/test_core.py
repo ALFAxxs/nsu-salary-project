@@ -171,10 +171,12 @@ class TelegramLinkingTests(TestCase):
         self.assertEqual(wrong.telegram_id, 555)
 
 
-class AutoSendAfterLinkTests(TestCase):
-    """A salary message held back only for TELEGRAM_NOT_CONNECTED must go
-    out immediately once the employee links — via either path (bot /start,
-    or an HR-side auto-link) — without an admin re-clicking Send."""
+class LinkDoesNotAutoSendTests(TestCase):
+    """Linking a Telegram account (either path — bot /start, or an HR-side
+    auto-link) must NEVER automatically dispatch a salary message, no
+    matter how many periods are sitting held back as
+    TELEGRAM_NOT_CONNECTED. The employee checks their own salary via
+    /salary; an admin can still explicitly re-click Send on an import."""
 
     def setUp(self):
         _, self.b1, _ = make_org()
@@ -200,7 +202,7 @@ class AutoSendAfterLinkTests(TestCase):
                 status_code=200, json=lambda: {"result": {"message_id": 1}})),
         )
 
-    def test_bot_start_link_triggers_the_held_back_message(self):
+    def test_bot_start_link_sends_nothing(self):
         token_patch, post_patch = self._send_mocks()
         with token_patch, post_patch as mock_post:
             with self.captureOnCommitCallbacks(execute=True):
@@ -208,11 +210,11 @@ class AutoSendAfterLinkTests(TestCase):
                     raw_phone="998901234567", raw_jshshir="30101234567890",
                     telegram_id=777, telegram_username="ali")
         self.assertEqual(outcome.result, LinkResult.LINKED)
-        self.assertEqual(mock_post.call_count, 1)
+        self.assertEqual(mock_post.call_count, 0)
         self.msg.refresh_from_db()
-        self.assertEqual(self.msg.status, MessageStatus.SENT)
+        self.assertEqual(self.msg.status, MessageStatus.TELEGRAM_NOT_CONNECTED)  # untouched
 
-    def test_hr_side_auto_link_triggers_the_held_back_message(self):
+    def test_hr_side_auto_link_sends_nothing(self):
         # This phone+JSHSHIR pressed /start (and was remembered) BEFORE HR
         # ever touched this employee's record.
         EmployeeRegistrationService.record_contact(
@@ -224,35 +226,13 @@ class AutoSendAfterLinkTests(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 linked = EmployeeRegistrationService.try_auto_link_from_contact(self.emp)
         self.assertTrue(linked)
-        self.assertEqual(mock_post.call_count, 1)
-        self.msg.refresh_from_db()
-        self.assertEqual(self.msg.status, MessageStatus.SENT)
-
-    def test_link_that_still_mismatches_jshshir_sends_nothing(self):
-        # Sanity check: the auto-send hook must not bypass the gate itself —
-        # only a genuinely PENDING-eligible message gets dispatched.
-        other = Employee.objects.create(
-            full_name="Boshqa xodim", phone="998909998877",
-            jshshir="99999999999999", organization_unit=self.b1)
-        token_patch, post_patch = self._send_mocks()
-        with token_patch, post_patch as mock_post:
-            with self.captureOnCommitCallbacks(execute=True):
-                EmployeeRegistrationService.link_telegram(
-                    raw_phone="998909998877", raw_jshshir="99999999999999",
-                    telegram_id=999)
         self.assertEqual(mock_post.call_count, 0)
         self.msg.refresh_from_db()
         self.assertEqual(self.msg.status, MessageStatus.TELEGRAM_NOT_CONNECTED)  # untouched
-        other.refresh_from_db()
-        self.assertEqual(other.telegram_id, 999)  # they themselves did link fine
 
-    def test_only_the_latest_period_auto_sends_not_the_whole_backlog(self):
-        # HR uploaded several months BEFORE this employee ever linked — all
-        # of them (including self.setUp's August one) sat as
-        # TELEGRAM_NOT_CONNECTED. Linking must not flood the employee with
-        # every old month at once; only the most recent period goes out
-        # automatically, older ones stay held back (still reachable via the
-        # bot's own salary-history command on demand).
+    def test_multiple_backlogged_periods_all_stay_untouched(self):
+        # HR uploaded several months BEFORE this employee ever linked —
+        # none of them should be auto-dispatched, no matter which period.
         for month in (6, 7):
             imp = SalaryImport.objects.create(
                 organization_unit=self.b1, period_year=2026, period_month=month,
@@ -271,15 +251,9 @@ class AutoSendAfterLinkTests(TestCase):
                 EmployeeRegistrationService.link_telegram(
                     raw_phone="998901234567", raw_jshshir="30101234567890",
                     telegram_id=777)
-        self.assertEqual(mock_post.call_count, 1)  # only August (the latest), not all 3
-
-        statuses = {
-            (m.salary.period_year, m.salary.period_month): m.status
-            for m in TelegramMessage.objects.select_related("salary").filter(employee=self.emp)
-        }
-        self.assertEqual(statuses[(2026, 8)], MessageStatus.SENT)
-        self.assertEqual(statuses[(2026, 7)], MessageStatus.TELEGRAM_NOT_CONNECTED)
-        self.assertEqual(statuses[(2026, 6)], MessageStatus.TELEGRAM_NOT_CONNECTED)
+        self.assertEqual(mock_post.call_count, 0)
+        for m in TelegramMessage.objects.filter(employee=self.emp):
+            self.assertEqual(m.status, MessageStatus.TELEGRAM_NOT_CONNECTED)
 
 
 class BranchIsolationTests(TestCase):

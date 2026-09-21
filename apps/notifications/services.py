@@ -164,60 +164,6 @@ class SalaryNotificationService:
         message.save(update_fields=["telegram_id", "status", "updated_at"])
         return message
 
-    @staticmethod
-    @transaction.atomic
-    def recheck_after_link(employee) -> int:
-        """
-        Called right after an employee becomes telegram-linked — via the
-        bot's own /start flow, or HR creating/editing an Employee that
-        auto-links to a pending TelegramContact (see
-        EmployeeRegistrationService). Only the MOST RECENT period's
-        held-back message(s) go out automatically — if HR had uploaded
-        several months of backlog before this employee ever linked, every
-        one of them would have sat as TELEGRAM_NOT_CONNECTED, and pushing
-        all of them at once would flood a brand-new user with months of
-        old notifications the moment they press /start. Older periods stay
-        exactly as they were (still reachable any time via the bot's own
-        "Oyliklar tarixi", which reads Salary directly and doesn't care
-        about TelegramMessage status, or by an admin explicitly resending
-        that import) — this only decides what gets pushed automatically.
-        A tie (paid by more than one branch in that same latest period)
-        sends all of them, same as before. Returns how many were dispatched.
-        """
-        from apps.notifications.tasks import send_salary_message
-
-        candidates = list(
-            TelegramMessage.objects.select_related("salary").filter(
-                employee=employee,
-                status__in=[MessageStatus.TELEGRAM_NOT_CONNECTED, MessageStatus.JSHSHIR_MISMATCH],
-            )
-        )
-        if not candidates:
-            return 0
-        latest_period = max(
-            (msg.salary.period_year, msg.salary.period_month) for msg in candidates
-        )
-
-        dispatched = 0
-        for msg in candidates:
-            if (msg.salary.period_year, msg.salary.period_month) != latest_period:
-                continue
-            status = _eligible_status(msg.salary, employee)
-            if status != MessageStatus.PENDING:
-                continue
-            msg.telegram_id = employee.telegram_id
-            msg.status = status
-            msg.save(update_fields=["telegram_id", "status", "updated_at"])
-            # Defer the Celery dispatch until this (possibly nested, e.g.
-            # inside link_telegram's own atomic block) transaction actually
-            # commits — a worker on a separate connection could otherwise
-            # try to load this message before the write is durable and find
-            # nothing, silently dropping the send.
-            transaction.on_commit(lambda pk=msg.pk: send_salary_message.delay(pk))
-            dispatched += 1
-        return dispatched
-
-
 class BroadcastService:
     """Free-text announcements to every telegram-linked employee, or to one
     branch's — separate from salary notifications. Gating (superadmin-only)
@@ -246,7 +192,7 @@ class BroadcastService:
             BroadcastRecipient(broadcast=broadcast, employee=emp, telegram_id=emp.telegram_id)
             for emp in recipients
         ])
-        # Same reasoning as recheck_after_link: defer past this transaction's
-        # commit so the worker's separate connection always finds the rows.
+        # Defer past this transaction's commit so a worker on a separate
+        # connection always finds the rows once it picks this task up.
         transaction.on_commit(lambda: dispatch_broadcast.delay(broadcast.pk))
         return broadcast
