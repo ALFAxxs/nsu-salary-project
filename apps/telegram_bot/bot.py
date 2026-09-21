@@ -184,10 +184,42 @@ def _months_keyboard(year: int, months: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+# --- Chat hygiene: the /start->consent->contact->JSHSHIR flow is a chain
+# of "please do X" prompts, each irrelevant the moment the user acts on it
+# — left alone they just pile up in the chat forever. `_prompt` sends a new
+# step message and deletes the PREVIOUS tracked one (best-effort: Telegram
+# may refuse if it's already gone or too old, which is fine either way).
+# `_clear_prompt` is for a message that should stay visible once sent (the
+# full legal consent text, a final linking result) — it deletes whatever
+# was tracked without starting to track the new message in its place. ---- #
+async def _prompt(msg: Message, state: FSMContext, text: str, reply_markup=None) -> None:
+    stored = await state.get_data()
+    old_id = stored.get("_prompt_id")
+    if old_id:
+        try:
+            await msg.bot.delete_message(msg.chat.id, old_id)
+        except Exception:
+            pass
+    sent = await msg.answer(text, reply_markup=reply_markup)
+    await state.update_data(_prompt_id=sent.message_id)
+
+
+async def _clear_prompt(msg: Message, state: FSMContext) -> None:
+    stored = await state.get_data()
+    old_id = stored.get("_prompt_id")
+    if old_id:
+        try:
+            await msg.bot.delete_message(msg.chat.id, old_id)
+        except Exception:
+            pass
+        await state.update_data(_prompt_id=None)
+
+
 # --- /start ------------------------------------------------------------ #
 @dp.message(Command("start"))
 @dp.message(Command("restart"))
 async def cmd_start(message: Message, state: FSMContext):
+    await _clear_prompt(message, state)  # drop any stale prompt from an abandoned flow
     await state.clear()  # /start always resets any half-finished verification
     emp = await data.get_employee(message.from_user.id)
     if emp:
@@ -199,26 +231,33 @@ async def cmd_start(message: Message, state: FSMContext):
     if not await data.has_consent(message.from_user.id):
         # Gate everything else behind the consent text — asked once, not
         # re-shown on every /start once agreed (see consent_agree below).
-        await message.answer(CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
+        await _prompt(message, state, CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
         return
-    await message.answer(
+    await _prompt(
+        message, state,
         "Oylik ish haqingiz haqida ma'lumot olish uchun telefon raqamingizni tasdiqlang.",
         reply_markup=CONTACT_KB,
     )
 
 
 @dp.callback_query(F.data == "consent:full")
-async def consent_show_full(callback: CallbackQuery):
-    # A separate message, not an edit — the short intro stays visible above it.
+async def consent_show_full(callback: CallbackQuery, state: FSMContext):
+    # The short intro is now superseded — delete it. The full legal text
+    # itself is deliberately NOT tracked as a disposable prompt (see
+    # _prompt/_clear_prompt above): it's the record of what the person is
+    # agreeing to, so it stays visible rather than getting swept away by
+    # the next step's prompt.
+    await _clear_prompt(callback.message, state)
     await callback.message.answer(CONSENT_FULL_TEXT, reply_markup=CONSENT_DECISION_KB)
     await callback.answer()
 
 
 @dp.callback_query(F.data == "consent:agree")
-async def consent_agree(callback: CallbackQuery):
+async def consent_agree(callback: CallbackQuery, state: FSMContext):
     await data.record_consent(callback.from_user.id)
     await callback.message.edit_reply_markup(reply_markup=None)  # buttons no longer clickable
-    await callback.message.answer(
+    await _prompt(
+        callback.message, state,
         "Rahmat! Endi telefon raqamingizni tasdiqlang.",
         reply_markup=CONTACT_KB,
     )
@@ -236,7 +275,7 @@ async def consent_decline(callback: CallbackQuery, state: FSMContext):
         "Siz shaxsga doir ma'lumotlarni qayta ishlashga rozilik bermadingiz. "
         "Botdan foydalanish uchun rozilik shart."
     )
-    await callback.message.answer(CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
+    await _prompt(callback.message, state, CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
     await callback.answer("Rad etildi.")
 
 
@@ -248,7 +287,7 @@ async def on_contact(message: Message, state: FSMContext):
     # underlying data-collection step itself too, in case an old keyboard
     # is still sitting in someone's chat from before this gate existed.
     if not await data.has_consent(message.from_user.id):
-        await message.answer(CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
+        await _prompt(message, state, CONSENT_INTRO_TEXT, reply_markup=CONSENT_INTRO_KB)
         return
     # Only accept the user's OWN contact (spec §8 security).
     if contact.user_id != message.from_user.id:
@@ -261,7 +300,8 @@ async def on_contact(message: Message, state: FSMContext):
         phone=contact.phone_number, username=message.from_user.username or "",
     )
     await state.set_state(LinkStates.waiting_for_jshshir)
-    await message.answer(
+    await _prompt(
+        message, state,
         "Rahmat! Endi tasdiqlash uchun JSHSHIR (PINFL) raqamingizni kiriting "
         "— 14 ta raqam.",
         reply_markup=ReplyKeyboardRemove(),
@@ -273,11 +313,15 @@ async def on_jshshir(message: Message, state: FSMContext):
     raw = (message.text or "").strip()
     jshshir = normalize_jshshir(raw)
     if not is_valid_jshshir(jshshir):
-        await message.answer(
+        await _prompt(
+            message, state,
             "JSHSHIR aynan 14 ta raqamdan iborat bo'lishi kerak. Qaytadan kiriting."
         )
         return  # stay in the same state — let them retry without re-sharing contact
 
+    # The "enter your JSHSHIR" (or retry) prompt is now answered — clear it
+    # before sending the final result, which stays visible as the record.
+    await _clear_prompt(message, state)
     stored = await state.get_data()
     phone = stored.get("phone", "")
     username = stored.get("username", "")
