@@ -24,13 +24,20 @@ Identity: a row is matched against an existing Employee by phone first,
 then by JSHSHIR — same dual-key rule used everywhere else in this system
 (apps.imports.validators). Matched rows are updated in place; unmatched
 rows create a new Employee. Nothing is ever deleted. Safe to re-run.
+
+A row whose phone/JSHSHIR/passport value is longer than the DB column
+allows (a garbled source cell — two numbers pasted into one, wrong
+column, ...) is reported and skipped rather than crashing the run; each
+row's own DB write also has its own savepoint, so one bad row can never
+roll back employees already imported earlier in the same run.
 """
 from __future__ import annotations
 
 import datetime
 
+from django.core.exceptions import FieldDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
-from django.db import IntegrityError, transaction
+from django.db import DataError, IntegrityError, transaction
 from openpyxl import load_workbook
 
 from apps.common.jshshir import normalize_jshshir
@@ -57,6 +64,29 @@ HEADER_CANDIDATES = {
 }
 
 _APOSTROPHES = "'‘’ʻʼ`"
+
+
+def _too_long_fields(fields: dict) -> list[tuple[str, str, int]]:
+    """
+    (field, value, max_length) for every string field whose value exceeds
+    the Employee model's own max_length — checked before insert so a
+    garbled source cell (e.g. two phone numbers pasted into one, or a
+    passport column that got the wrong value) is reported clearly and
+    that ONE row skipped, instead of the raw DataError Postgres would
+    otherwise raise crashing the whole import.
+    """
+    errors = []
+    for name, value in fields.items():
+        if not isinstance(value, str) or not value:
+            continue
+        try:
+            field_obj = Employee._meta.get_field(name)
+        except FieldDoesNotExist:
+            continue
+        max_len = getattr(field_obj, "max_length", None)
+        if max_len and len(value) > max_len:
+            errors.append((name, value, max_len))
+    return errors
 
 
 def _clean_header(text) -> str:
@@ -190,6 +220,19 @@ class Command(BaseCommand):
                 if jshshir:
                     fields["jshshir"] = jshshir
 
+                too_long = _too_long_fields(fields)
+                if too_long:
+                    details = "; ".join(
+                        f"{f}='{v[:30]}{'...' if len(v) > 30 else ''}' ({len(v)}/{m} belgi)"
+                        for f, v, m in too_long
+                    )
+                    self.stdout.write(self.style.ERROR(
+                        f"Qator {row_number}: '{full_name}' o'tkazib yuborildi — "
+                        f"maydon juda uzun: {details}"
+                    ))
+                    skipped += 1
+                    continue
+
                 existing = None
                 if phone:
                     existing = Employee.objects.filter(normalized_phone=phone).first()
@@ -198,8 +241,13 @@ class Command(BaseCommand):
 
                 if existing is None:
                     try:
-                        employee = Employee.objects.create(**fields)
-                    except IntegrityError as exc:
+                        # Own savepoint: a DB-level failure here (anything
+                        # the length check above didn't already catch) only
+                        # rolls back THIS row, not every row already
+                        # imported earlier in this same run.
+                        with transaction.atomic():
+                            employee = Employee.objects.create(**fields)
+                    except (IntegrityError, DataError) as exc:
                         self.stdout.write(self.style.ERROR(
                             f"Qator {row_number}: '{full_name}' yaratilmadi ({exc})"
                         ))
@@ -231,8 +279,9 @@ class Command(BaseCommand):
                 for k, v in changed.items():
                     setattr(existing, k, v)
                 try:
-                    existing.save()
-                except IntegrityError as exc:
+                    with transaction.atomic():  # own savepoint, see the create() path above
+                        existing.save()
+                except (IntegrityError, DataError) as exc:
                     self.stdout.write(self.style.ERROR(
                         f"Qator {row_number}: '{full_name}' yangilanmadi ({exc})"
                     ))
