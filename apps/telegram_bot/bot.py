@@ -459,6 +459,7 @@ async def _require_linked(message: Message) -> bool:
 @dp.message(F.text == "💰 Joriy oylik")
 @dp.message(Command("salary"))
 async def current_salary(message: Message):
+    await _delete_incoming(message)  # the menu button press itself
     if not await _require_linked(message):
         return
     salaries = await data.get_current_salary(message.from_user.id)
@@ -477,6 +478,7 @@ async def current_salary(message: Message):
 @dp.message(F.text == "📊 Oyliklar tarixi")
 @dp.message(Command("history"))
 async def salary_history(message: Message):
+    await _delete_incoming(message)  # the menu button press itself
     if not await _require_linked(message):
         return
     years = await data.list_salary_years(message.from_user.id)
@@ -541,6 +543,7 @@ async def history_pick_month(callback: CallbackQuery):
 @dp.message(F.text == "👤 Profilim")
 @dp.message(Command("profile"))
 async def profile(message: Message):
+    await _delete_incoming(message)  # the menu button press itself
     emp = await data.get_employee(message.from_user.id)
     if emp is None:
         await message.answer("Avval telefon raqamingizni tasdiqlang.", reply_markup=CONTACT_KB)
@@ -555,6 +558,7 @@ async def profile(message: Message):
 @dp.message(F.text == "❓ Yordam")
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
+    await _delete_incoming(message)  # the menu button press itself
     await message.answer(
         "❓ Yordam\n\n"
         "💰 Joriy oylik — eng so'nggi oylik\n"
