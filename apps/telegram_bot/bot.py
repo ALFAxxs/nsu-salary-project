@@ -215,6 +215,31 @@ async def _clear_prompt(msg: Message, state: FSMContext) -> None:
         await state.update_data(_prompt_id=None)
 
 
+EPHEMERAL_RESULT_DELAY = 15  # seconds a final linking result stays visible
+
+
+async def _send_ephemeral(msg: Message, text: str, *, reply_markup=None,
+                          delay: float = EPHEMERAL_RESULT_DELAY) -> None:
+    """
+    For a final result (linking succeeded/failed) — worth seeing right
+    away, not worth leaving in the chat forever. Deletes itself in the
+    background after `delay` seconds; a reply keyboard passed via
+    `reply_markup` (e.g. MENU_KB) stays on screen even after the message
+    that introduced it is gone — Telegram keyboards are a chat-level UI
+    element, independent of any one message.
+    """
+    sent = await msg.answer(text, reply_markup=reply_markup)
+
+    async def _delete_later():
+        await asyncio.sleep(delay)
+        try:
+            await sent.delete()
+        except Exception:
+            pass
+
+    asyncio.create_task(_delete_later())
+
+
 # --- /start ------------------------------------------------------------ #
 @dp.message(Command("start"))
 @dp.message(Command("restart"))
@@ -242,13 +267,12 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data == "consent:full")
 async def consent_show_full(callback: CallbackQuery, state: FSMContext):
-    # The short intro is now superseded — delete it. The full legal text
-    # itself is deliberately NOT tracked as a disposable prompt (see
-    # _prompt/_clear_prompt above): it's the record of what the person is
-    # agreeing to, so it stays visible rather than getting swept away by
-    # the next step's prompt.
-    await _clear_prompt(callback.message, state)
-    await callback.message.answer(CONSENT_FULL_TEXT, reply_markup=CONSENT_DECISION_KB)
+    # Deletes the short intro, tracks the full text itself as the current
+    # prompt so it gets cleaned up in turn once the next step appears
+    # (consent_agree/consent_decline below) — the actual consent record
+    # lives in BotConsent (apps.employees.data.record_consent), not in
+    # this chat message, so deleting it here loses nothing legally.
+    await _prompt(callback.message, state, CONSENT_FULL_TEXT, reply_markup=CONSENT_DECISION_KB)
     await callback.answer()
 
 
@@ -269,6 +293,7 @@ async def consent_decline(callback: CallbackQuery, state: FSMContext):
     # No consent recorded -> the bot cannot be used at all (spec: rad etsa
     # botdan foydalana olmasin). Send them back to the very start of the
     # consent flow instead of leaving them stuck with no way forward.
+    await _clear_prompt(callback.message, state)  # the full text (tracked above), before state.clear() loses it
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)  # buttons no longer clickable
     await callback.message.answer(
@@ -320,7 +345,8 @@ async def on_jshshir(message: Message, state: FSMContext):
         return  # stay in the same state — let them retry without re-sharing contact
 
     # The "enter your JSHSHIR" (or retry) prompt is now answered — clear it
-    # before sending the final result, which stays visible as the record.
+    # before sending the final result (which is itself ephemeral too, see
+    # _send_ephemeral — worth seeing immediately, not worth keeping forever).
     await _clear_prompt(message, state)
     stored = await state.get_data()
     phone = stored.get("phone", "")
@@ -333,7 +359,8 @@ async def on_jshshir(message: Message, state: FSMContext):
     )
 
     if result in ("LINKED", "ALREADY_SAME"):
-        await message.answer(
+        await _send_ephemeral(
+            message,
             f"Rahmat, {name}! Akkauntingiz muvaffaqiyatli tasdiqlandi va ulandi.",
             reply_markup=MENU_KB,
         )
@@ -350,32 +377,37 @@ async def on_jshshir(message: Message, state: FSMContext):
     kb = MENU_KB if still_linked else ReplyKeyboardRemove()
 
     if result == "JSHSHIR_MISMATCH":
-        await message.answer(
+        await _send_ephemeral(
+            message,
             "Telefon raqami va JSHSHIR mos kelmadi (yoki xodim ma'lumotlarida "
             "JSHSHIR hali kiritilmagan). Hech qanday ma'lumot ulanmadi — "
             "HR bo'limiga murojaat qiling.",
             reply_markup=kb,
         )
     elif result == "CONFLICT_EMPLOYEE":
-        await message.answer(
+        await _send_ephemeral(
+            message,
             "Ushbu xodim profili boshqa Telegram akkauntiga ulangan. "
             "HR bilan bog'laning.",
             reply_markup=kb,
         )
     elif result == "CONFLICT_TELEGRAM":
-        await message.answer(
+        await _send_ephemeral(
+            message,
             "Bu Telegram akkaunt allaqachon boshqa xodimga ulangan. "
             "HR bilan bog'laning.",
             reply_markup=kb,
         )
     elif result == "AMBIGUOUS_PHONE":
-        await message.answer(
+        await _send_ephemeral(
+            message,
             "Bu telefon raqami bir nechta profilga mos keladi. "
             "Aniqlashtirish uchun HR bo'limiga murojaat qiling.",
             reply_markup=kb,
         )
     else:  # NOT_FOUND — phone/JSHSHIR remembered; will auto-link once HR registers a match.
-        await message.answer(
+        await _send_ephemeral(
+            message,
             "Ma'lumotlaringiz qabul qilindi. Hozircha sizga tegishli xodim yozuvi "
             "tizimga kiritilmagan — HR ro'yxatga olgach, avtomatik ulanasiz va "
             "xabar olasiz.",
