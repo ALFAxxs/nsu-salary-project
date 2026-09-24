@@ -140,10 +140,10 @@ class ReportService:
     def salary_totals(user, *, year: int, month: int) -> dict:
         """
         Per-branch payroll totals for one period (spec: filial/oy bo'yicha
-        yalpi/avans/ushlab qolingan/sof umumiy hisobot) — HR-restricted, see
-        User.can_view_salary_report. Branch/accountant admins only ever get
-        their own unit (accessible_unit_ids scopes `units` below to one row);
-        head office/super admin get every branch plus a grand total.
+        yalpi/avans/ushlab qolingan/sof umumiy hisobot) — only head office
+        admin/super admin can even reach this (see User.can_view_reports),
+        so `units` below always resolves to every branch in practice;
+        accessible_unit_ids() scoping is kept anyway as defense in depth.
 
         "employees" is a distinct headcount (Count(..., distinct=True)) since
         one employee can have more than one current Salary row this period

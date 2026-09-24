@@ -1051,3 +1051,37 @@ class BroadcastTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(BroadcastMessage.objects.count(), 1)
         self.assertEqual(BroadcastMessage.objects.first().text, "Hammaga salom")
+
+
+class ReportsAccessTests(TestCase):
+    """/reports/ and /reports/moliyaviy/ are head-office-admin/super-admin
+    only — branch admin, accountant, and HR must all be blocked (403),
+    not just scoped to their own branch."""
+
+    def setUp(self):
+        self.hq, self.b1, _ = make_org()
+        self.super_admin = User.objects.create_user(
+            username="rep_super", password="x", role=Role.SUPER_ADMIN, is_superuser=True)
+        self.hq_admin = User.objects.create_user(
+            username="rep_hq", password="x", role=Role.HEAD_OFFICE_ADMIN, organization_unit=self.hq)
+        self.branch_admin = User.objects.create_user(
+            username="rep_branch", password="x", role=Role.BRANCH_ADMIN, organization_unit=self.b1)
+        self.accountant = User.objects.create_user(
+            username="rep_acct", password="x", role=Role.ACCOUNTANT, organization_unit=self.b1)
+        self.hr = User.objects.create_user(
+            username="rep_hr", password="x", role=Role.HR, organization_unit=self.b1)
+
+    def _get(self, username, url_name):
+        c = Client()
+        c.login(username=username, password="x")
+        return c.get(reverse(url_name))
+
+    def test_super_admin_and_head_office_allowed(self):
+        for username in ("rep_super", "rep_hq"):
+            self.assertEqual(self._get(username, "reports:index").status_code, 200)
+            self.assertEqual(self._get(username, "reports:salary_report").status_code, 200)
+
+    def test_branch_admin_accountant_hr_blocked(self):
+        for username in ("rep_branch", "rep_acct", "rep_hr"):
+            self.assertEqual(self._get(username, "reports:index").status_code, 403)
+            self.assertEqual(self._get(username, "reports:salary_report").status_code, 403)

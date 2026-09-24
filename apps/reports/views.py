@@ -11,6 +11,7 @@ from apps.reports.services import ReportService
 
 
 @login_required
+@require_role_check("can_view_reports")
 def report_index(request):
     today = date.today()
     try:
@@ -27,12 +28,11 @@ def report_index(request):
 
 
 @login_required
-@require_role_check("can_view_salary_report")
+@require_role_check("can_view_reports")
 def salary_report(request):
-    """Moliyaviy hisobot — per-branch payroll totals. HR cannot reach this
-    view at all (can_view_salary_report excludes it); branch/accountant
-    admins see only their own branch's row (ReportService.salary_totals
-    scopes `units` the same way branch_breakdown does)."""
+    """Moliyaviy hisobot — per-branch payroll totals. Only head office
+    admin/super admin can reach this view at all (can_view_reports) —
+    branch admin, accountant, and HR are all excluded, not just scoped."""
     today = date.today()
     try:
         year = int(request.GET.get("year", today.year))

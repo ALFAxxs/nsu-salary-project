@@ -96,11 +96,11 @@ class User(AbstractUser):
     def can_send_notifications(self) -> bool:
         return self.can_import_salary()
 
-    def can_view_salary_report(self) -> bool:
-        """Branch/accountant admins see their own branch's payroll totals,
-        head office/super admin see every branch's — HR never sees this
-        (payroll figures aren't part of the HR registry role)."""
-        return self.can_import_salary()
+    def can_view_reports(self) -> bool:
+        """Hisobotlar (/reports/, /reports/moliyaviy/) — faqat bosh ofis
+        admini va super admin ko'radi. Filial admin, buxgalter va HR bu
+        sahifalarni umuman ko'rmaydi/kira olmaydi."""
+        return self.role in {Role.SUPER_ADMIN, Role.HEAD_OFFICE_ADMIN} or self.is_superuser
 
     def accessible_unit_ids(self) -> list[int] | None:
         """
