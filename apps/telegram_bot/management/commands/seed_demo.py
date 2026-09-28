@@ -65,20 +65,22 @@ class Command(BaseCommand):
         # Head office admin.
         hq_user, hq_created = User.objects.get_or_create(
             username="hqadmin",
-            defaults={"role": Role.HEAD_OFFICE_ADMIN, "organization_unit": hq},
+            defaults={"role": Role.HEAD_OFFICE_ADMIN},
         )
         if hq_created:
             hq_user.set_password("Hqadmin!2345")
             hq_user.save()
+        hq_user.organization_units.add(hq)
         # Branch 5 admin (for the isolation test).
         br5 = branches[4]
         u, created = User.objects.get_or_create(
             username="branch5",
-            defaults={"role": Role.BRANCH_ADMIN, "organization_unit": br5},
+            defaults={"role": Role.BRANCH_ADMIN},
         )
         if created:
             u.set_password("Branch!2345")
             u.save()
+        u.organization_units.add(br5)
 
         self.stdout.write(self.style.SUCCESS(
             "Admins: superadmin / hqadmin / branch5 (parollar kodda)"

@@ -6,11 +6,16 @@ from apps.accounts.models import User
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ("username", "role", "organization_unit", "is_active")
-    list_filter = ("role", "is_active", "organization_unit")
+    list_display = ("username", "role", "organization_units_list", "is_active")
+    list_filter = ("role", "is_active", "organization_units")
+    filter_horizontal = ("groups", "user_permissions", "organization_units")
     fieldsets = UserAdmin.fieldsets + (
-        ("Role", {"fields": ("role", "organization_unit", "phone")}),
+        ("Role", {"fields": ("role", "organization_units", "phone")}),
     )
+
+    @admin.display(description="Organization units")
+    def organization_units_list(self, obj):
+        return ", ".join(obj.organization_units.values_list("name", flat=True)) or "—"
 
     # Account management (including the is_staff/is_superuser toggles) is
     # sensitive enough that only real superusers may reach it here — regular

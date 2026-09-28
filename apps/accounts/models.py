@@ -1,9 +1,11 @@
 """
 Custom user model with role-based access control.
 
-Roles map directly to the spec (section 5). Every admin user is scoped to an
-OrganizationUnit; branch-level roles can only ever see their own unit, while
-head-office / super-admin roles see everything. The scoping is enforced in the
+Roles map directly to the spec (section 5). Every branch-scoped admin user
+(BRANCH_ADMIN, ACCOUNTANT, HR) is scoped to one or more OrganizationUnits —
+a single accountant or HR person commonly covers several small branches, so
+this is a many-to-many, not a single FK. Head-office/super-admin roles see
+everything regardless of what's assigned. The scoping is enforced in the
 querysets (selectors), never only in templates.
 """
 from __future__ import annotations
@@ -39,17 +41,19 @@ class User(AbstractUser):
         choices=Role.choices,
         default=Role.BRANCH_ADMIN,
     )
-    # Which unit this user is scoped to. Required for branch-level roles;
-    # optional (null) only for SUPER_ADMIN who is global by definition.
-    # CASCADE: deleting a branch (apps.organizations.views.unit_delete) is a
-    # deliberate full wipe, including admin logins scoped to it.
-    organization_unit = models.ForeignKey(
+    # Which unit(s) this user is scoped to. At least one required for
+    # branch-level roles (BRANCH_ADMIN/ACCOUNTANT/HR); left empty for
+    # SUPER_ADMIN/HEAD_OFFICE_ADMIN, who are global by definition regardless
+    # of what's assigned here. Many-to-many rather than a single FK: a real
+    # org commonly has one accountant or HR person covering several small
+    # branches. Deleting a branch (apps.organizations.views.unit_delete)
+    # only unlinks it here — M2M has no on_delete to CASCADE the account
+    # away, and a user with other units left should keep their login.
+    organization_units = models.ManyToManyField(
         "organizations.OrganizationUnit",
-        on_delete=models.CASCADE,
         related_name="users",
-        null=True,
         blank=True,
-        verbose_name=_("organization unit"),
+        verbose_name=_("organization units"),
     )
     phone = models.CharField(_("phone"), max_length=32, blank=True)
 
@@ -109,4 +113,14 @@ class User(AbstractUser):
         """
         if self.is_global_scope:
             return None
-        return [self.organization_unit_id] if self.organization_unit_id else []
+        return list(self.organization_units.values_list("id", flat=True))
+
+    @property
+    def organization_units_display(self) -> str:
+        """Comma-joined branch names for UI display (admin list, topbar) —
+        "Global" for head office/super admin regardless of what's assigned,
+        "—" for a branch-scoped user with none assigned yet."""
+        if self.is_global_scope:
+            return _("Global")
+        names = list(self.organization_units.values_list("name", flat=True))
+        return ", ".join(names) if names else "—"

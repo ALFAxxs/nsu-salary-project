@@ -8,7 +8,7 @@
   <thead class="table-light"><tr><th>Login</th><th>F.I.Sh</th><th>Rol</th><th>Filial</th><th>Holat</th><th></th></tr></thead>
   <tbody>{% for u in users %}<tr>
     <td>{{ u.username }}</td><td>{{ u.get_full_name }}</td><td><span class="badge bg-info">{{ u.get_role_display }}</span></td>
-    <td>{{ u.organization_unit|default:"—" }}</td>
+    <td>{{ u.organization_units_display }}</td>
     <td>{% if u.is_active %}<span class="badge badge-green">Faol</span>{% else %}<span class="badge bg-secondary">Nofaol</span>{% endif %}</td>
     <td><a href="{% url 'accounts:admin_edit' u.pk %}" class="btn btn-sm btn-outline-primary">Tahrir</a></td>
   </tr>{% endfor %}</tbody>

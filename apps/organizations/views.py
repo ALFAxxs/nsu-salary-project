@@ -82,21 +82,17 @@ def unit_toggle_active(request, pk):
 def unit_delete(request, pk):
     """
     Permanently delete a branch AND everything scoped to it: its employees
-    (with their salary/notification history, via the model's own CASCADEs),
-    its import history, and any admin logins assigned to it. There is no
-    undo — this is a deliberate full wipe, not a soft delete (use
-    unit_toggle_active for that).
+    (with their salary/notification history, via the model's own CASCADEs)
+    and its import history. Admin logins assigned to it are only UNLINKED,
+    not deleted — organization_units is many-to-many now (one admin can
+    cover several branches), so removing one shouldn't destroy their whole
+    account, even if it's the only branch they had. There is no undo for
+    the branch itself — this is a deliberate full wipe, not a soft delete
+    (use unit_toggle_active for that).
     """
     unit = get_object_or_404(OrganizationUnit, pk=pk)
     if unit.is_head_office:
         messages.error(request, "Bosh ofisni o'chirib bo'lmaydi.")
-        return redirect("organizations:list")
-    if request.user.organization_unit_id == unit.pk:
-        messages.error(
-            request,
-            "O'zingiz biriktirilgan filialni o'chira olmaysiz — bu akkauntingizni "
-            "ham o'chirib yuboradi. Boshqa super admin orqali o'chirtiring.",
-        )
         return redirect("organizations:list")
 
     name, code = unit.name, unit.code
@@ -117,11 +113,11 @@ def unit_delete(request, pk):
     AuditService.log(
         AuditAction.BRANCH_DELETED, object_type="OrganizationUnit", object_id=str(pk),
         metadata={"code": code, "name": name, "employees": emp_count,
-                  "admins": user_count, "imports": import_count},
+                  "admins_unlinked": user_count, "imports": import_count},
     )
-    messages.success(
-        request,
-        f"'{name}' o'chirildi ({emp_count} ta xodim, {user_count} ta admin login, "
-        f"{import_count} ta import bilan birga).",
-    )
+    text = f"'{name}' o'chirildi ({emp_count} ta xodim, {import_count} ta import bilan birga)."
+    if user_count:
+        text += (f" Bu filialga biriktirilgan {user_count} ta admin login o'chirilmadi, "
+                 "faqat shu filialdan uzildi.")
+    messages.success(request, text)
     return redirect("organizations:list")

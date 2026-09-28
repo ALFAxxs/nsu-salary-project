@@ -58,7 +58,7 @@
           <span class="badge bg-secondary">{{ user.get_role_display }}</span>
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
-          <li><span class="dropdown-item-text small text-muted">{{ user.organization_unit|default:"Global" }}</span></li>
+          <li><span class="dropdown-item-text small text-muted">{{ user.organization_units_display }}</span></li>
           <li><hr class="dropdown-divider"></li>
           <li>
             <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}

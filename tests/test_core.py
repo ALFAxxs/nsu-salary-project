@@ -40,6 +40,16 @@ def make_org():
     return hq, b1, b2
 
 
+def mkuser(username, role, units=None, **extra):
+    """Create a test admin user and (optionally) assign it to one or more
+    OrganizationUnits — organization_units is many-to-many, so unlike the
+    old single FK it can't be set via the create_user() constructor."""
+    user = User.objects.create_user(username=username, password="x", role=role, **extra)
+    if units:
+        user.organization_units.set(units if isinstance(units, (list, tuple)) else [units])
+    return user
+
+
 class AdminPasswordPolicyTests(TestCase):
     """AUTH_PASSWORD_VALIDATORS (settings.py) must actually be enforced when
     an admin sets another staff account's password — set_password() alone
@@ -50,7 +60,7 @@ class AdminPasswordPolicyTests(TestCase):
 
         form = AdminUserForm(data={
             "username": "newstaff", "email": "", "first_name": "", "last_name": "",
-            "phone": "", "role": Role.HR, "organization_unit": "",
+            "phone": "", "role": Role.HR, "organization_units": [],
             "is_active": "on", "password": "1",
         })
         self.assertFalse(form.is_valid())
@@ -62,7 +72,7 @@ class AdminPasswordPolicyTests(TestCase):
         _, b1, _ = make_org()
         form = AdminUserForm(data={
             "username": "newstaff2", "email": "", "first_name": "", "last_name": "",
-            "phone": "", "role": Role.BRANCH_ADMIN, "organization_unit": b1.id,
+            "phone": "", "role": Role.BRANCH_ADMIN, "organization_units": [b1.id],
             "is_active": "on", "password": "Xy7$correct-horse-battery",
         })
         self.assertTrue(form.is_valid(), form.errors)
@@ -267,12 +277,8 @@ class BranchIsolationTests(TestCase):
         self.e2 = Employee.objects.create(
             employee_code="B2-E1", full_name="Branch2 Emp", phone="998902220001",
             organization_unit=self.b2)
-        self.admin1 = User.objects.create_user(
-            username="b1admin", password="x", role=Role.BRANCH_ADMIN,
-            organization_unit=self.b1)
-        self.hqadmin = User.objects.create_user(
-            username="hq", password="x", role=Role.HEAD_OFFICE_ADMIN,
-            organization_unit=self.hq)
+        self.admin1 = mkuser("b1admin", Role.BRANCH_ADMIN, self.b1)
+        self.hqadmin = mkuser("hq", Role.HEAD_OFFICE_ADMIN, self.hq)
 
     def test_selector_scopes_employees(self):
         visible = set(employees_for(self.admin1).values_list("id", flat=True))
@@ -432,10 +438,8 @@ class MultiBranchSalaryTests(TestCase):
         self.emp = Employee.objects.create(
             employee_code="", full_name="Ikki filialda ishlovchi",
             phone="998901234567", organization_unit=self.b1)
-        self.admin1 = User.objects.create_user(
-            "b1admin2", password="x", role=Role.BRANCH_ADMIN, organization_unit=self.b1)
-        self.admin2 = User.objects.create_user(
-            "b2admin2", password="x", role=Role.BRANCH_ADMIN, organization_unit=self.b2)
+        self.admin1 = mkuser("b1admin2", Role.BRANCH_ADMIN, self.b1)
+        self.admin2 = mkuser("b2admin2", Role.BRANCH_ADMIN, self.b2)
 
     def _import(self, unit):
         import uuid
@@ -970,8 +974,7 @@ class BroadcastTests(TestCase):
             organization_unit=self.b2, telegram_id=222)
         self.superadmin = User.objects.create_user(
             "super1", password="x", role=Role.SUPER_ADMIN)
-        self.branch_admin = User.objects.create_user(
-            "branch1", password="x", role=Role.BRANCH_ADMIN, organization_unit=self.b1)
+        self.branch_admin = mkuser("branch1", Role.BRANCH_ADMIN, self.b1)
 
     def _mocks(self):
         from unittest.mock import MagicMock, patch
@@ -1062,14 +1065,10 @@ class ReportsAccessTests(TestCase):
         self.hq, self.b1, _ = make_org()
         self.super_admin = User.objects.create_user(
             username="rep_super", password="x", role=Role.SUPER_ADMIN, is_superuser=True)
-        self.hq_admin = User.objects.create_user(
-            username="rep_hq", password="x", role=Role.HEAD_OFFICE_ADMIN, organization_unit=self.hq)
-        self.branch_admin = User.objects.create_user(
-            username="rep_branch", password="x", role=Role.BRANCH_ADMIN, organization_unit=self.b1)
-        self.accountant = User.objects.create_user(
-            username="rep_acct", password="x", role=Role.ACCOUNTANT, organization_unit=self.b1)
-        self.hr = User.objects.create_user(
-            username="rep_hr", password="x", role=Role.HR, organization_unit=self.b1)
+        self.hq_admin = mkuser("rep_hq", Role.HEAD_OFFICE_ADMIN, self.hq)
+        self.branch_admin = mkuser("rep_branch", Role.BRANCH_ADMIN, self.b1)
+        self.accountant = mkuser("rep_acct", Role.ACCOUNTANT, self.b1)
+        self.hr = mkuser("rep_hr", Role.HR, self.b1)
 
     def _get(self, username, url_name):
         c = Client()
@@ -1085,3 +1084,58 @@ class ReportsAccessTests(TestCase):
         for username in ("rep_branch", "rep_acct", "rep_hr"):
             self.assertEqual(self._get(username, "reports:index").status_code, 403)
             self.assertEqual(self._get(username, "reports:salary_report").status_code, 403)
+
+
+class MultiBranchAssignmentTests(TestCase):
+    """organization_units is many-to-many (spec: one accountant/HR person
+    commonly covers several small branches) — a branch-scoped admin
+    assigned to more than one unit must see all of them, not just one."""
+
+    def setUp(self):
+        self.hq, self.b1, self.b2 = make_org()
+        self.e1 = Employee.objects.create(
+            full_name="B1 Emp", phone="998901110001", organization_unit=self.b1)
+        self.e2 = Employee.objects.create(
+            full_name="B2 Emp", phone="998901110002", organization_unit=self.b2)
+
+    def test_accessible_unit_ids_returns_every_assigned_unit(self):
+        admin = mkuser("multi1", Role.BRANCH_ADMIN, [self.b1, self.b2])
+        self.assertCountEqual(admin.accessible_unit_ids(), [self.b1.id, self.b2.id])
+
+    def test_selector_sees_employees_from_every_assigned_branch(self):
+        admin = mkuser("multi2", Role.ACCOUNTANT, [self.b1, self.b2])
+        visible = set(employees_for(admin).values_list("id", flat=True))
+        self.assertEqual(visible, {self.e1.id, self.e2.id})
+
+    def test_web_view_shows_employees_from_both_branches(self):
+        mkuser("multi3", Role.HR, [self.b1, self.b2])
+        c = Client()
+        c.login(username="multi3", password="x")
+        resp = c.get(reverse("employees:list"))
+        body = resp.content.decode()
+        self.assertIn("B1 Emp", body)
+        self.assertIn("B2 Emp", body)
+
+    def test_admin_form_saves_multiple_units(self):
+        from apps.accounts.forms import AdminUserForm
+
+        form = AdminUserForm(data={
+            "username": "multi4", "email": "", "first_name": "", "last_name": "",
+            "phone": "", "role": Role.BRANCH_ADMIN,
+            "organization_units": [self.b1.id, self.b2.id],
+            "is_active": "on", "password": "Xy7$correct-horse-battery",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        user = form.save()
+        self.assertCountEqual(
+            user.organization_units.values_list("id", flat=True), [self.b1.id, self.b2.id]
+        )
+
+    def test_deleting_one_branch_only_unlinks_it_not_the_account(self):
+        # M2M has no on_delete to CASCADE — an admin covering two branches
+        # keeps their login (and the other branch) if just one is deleted.
+        admin = mkuser("multi5", Role.BRANCH_ADMIN, [self.b1, self.b2])
+        self.b1.delete()
+        admin.refresh_from_db()
+        self.assertTrue(User.objects.filter(pk=admin.pk).exists())
+        self.assertEqual(admin.accessible_unit_ids(), [self.b2.id])

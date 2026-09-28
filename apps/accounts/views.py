@@ -70,7 +70,7 @@ def logout_view(request):
 @login_required
 @require_role_check("can_manage_admins")
 def admin_list(request):
-    users = User.objects.select_related("organization_unit").order_by("username")
+    users = User.objects.prefetch_related("organization_units").order_by("username")
     return render(request, "accounts/admin_list.html", {"users": users})
 
 

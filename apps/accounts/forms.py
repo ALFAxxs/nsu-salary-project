@@ -25,7 +25,7 @@ class AdminUserForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["username", "first_name", "last_name", "email", "phone",
-                  "role", "organization_unit", "is_active"]
+                  "role", "organization_units", "is_active"]
         widgets = {
             "username": forms.TextInput(attrs={"class": "form-control"}),
             "first_name": forms.TextInput(attrs={"class": "form-control"}),
@@ -33,7 +33,7 @@ class AdminUserForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"class": "form-control"}),
             "phone": forms.TextInput(attrs={"class": "form-control"}),
             "role": forms.Select(attrs={"class": "form-select"}),
-            "organization_unit": forms.Select(attrs={"class": "form-select"}),
+            "organization_units": forms.SelectMultiple(attrs={"class": "form-select"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
@@ -50,10 +50,11 @@ class AdminUserForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         role = cleaned.get("role")
-        unit = cleaned.get("organization_unit")
-        # Branch-scoped roles require a unit.
-        if role in {Role.BRANCH_ADMIN, Role.ACCOUNTANT, Role.HR} and not unit:
-            self.add_error("organization_unit", "Bu rol uchun filial tanlanishi shart.")
+        units = cleaned.get("organization_units")
+        # Branch-scoped roles require at least one unit (one accountant/HR
+        # person can cover several small branches, so more than one is fine).
+        if role in {Role.BRANCH_ADMIN, Role.ACCOUNTANT, Role.HR} and not units:
+            self.add_error("organization_units", "Bu rol uchun kamida bitta filial tanlanishi shart.")
         if not self.instance.pk and not cleaned.get("password"):
             self.add_error("password", "Yangi foydalanuvchi uchun parol majburiy.")
         return cleaned
@@ -65,4 +66,5 @@ class AdminUserForm(forms.ModelForm):
             user.set_password(pwd)
         if commit:
             user.save()
+            self.save_m2m()  # persists the organization_units selection
         return user
