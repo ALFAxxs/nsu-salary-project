@@ -33,7 +33,7 @@ class AdminUserForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"class": "form-control"}),
             "phone": forms.TextInput(attrs={"class": "form-control"}),
             "role": forms.Select(attrs={"class": "form-select"}),
-            "organization_units": forms.SelectMultiple(attrs={"class": "form-select"}),
+            "organization_units": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 

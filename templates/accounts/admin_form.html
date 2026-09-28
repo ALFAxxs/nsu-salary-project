@@ -5,7 +5,18 @@
 {% block content %}
 <div class="card" style="max-width:560px"><div class="card-body">
 <form method="post">{% csrf_token %}
-  {% for field in form %}<div class="mb-3"><label class="form-label">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}{% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endfor %}
+  {% for field in form %}<div class="mb-3"><label class="form-label">{{ field.label }}</label>
+    {% if field.name == "organization_units" %}
+    <div class="border rounded p-2" style="max-height:220px; overflow-y:auto;">
+      {% for checkbox in field %}
+      <div class="form-check">
+        {{ checkbox.tag }}
+        <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+      </div>
+      {% empty %}<span class="text-muted small">Filiallar topilmadi</span>{% endfor %}
+    </div>
+    {% else %}{{ field }}{% endif %}
+    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}{% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>{% endfor %}
   <button class="btn btn-primary">Saqlash</button><a href="{% url 'accounts:admin_list' %}" class="btn btn-light">Bekor</a>
 </form>
 </div></div>
